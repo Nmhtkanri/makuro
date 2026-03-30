@@ -686,7 +686,7 @@ Private Sub Step3_請求明細作成()
     For i = 7 To MR2
         WriteLog "[Step3-6] 行" & i & " F列=" & Nz(ws2.Cells(i, 6).Value)
 
-        ws2.Cells(i, 3).Value = "BHM" & p_DateStr & p_TimeStr & ws2.Cells(i, 6)
+        ws2.Cells(i, 3).Value = "BHM" & Format(valK1, "yyyymmdd") & ws2.Cells(i, 6)
         ws2.Cells(i, 4).Value = 1
         ws2.Cells(i, 9).NumberFormatLocal = "@"
         ws2.Cells(i, 9).Value = Format(valK1, "yyyy") & "/" & Format(valK1, "mm")
@@ -1208,7 +1208,7 @@ Private Function ProcessContract_Internal(contractNo As String, wsEStaffing As W
     fields(8) = jobCode
 
     ' --- 請求書コード: BH/BDファイルと同じコード体系で生成 ---
-    fields(3) = "BHM" & p_DateStr & p_TimeStr & jobCode
+    fields(3) = "BHM" & Format(p_wsMain.Range("K1").Value, "yyyymmdd") & jobCode
 
     ' --- 請求書明細コード: 契約No（BD明細との紐づけ） ---
     fields(4) = contractNo
