@@ -1231,9 +1231,11 @@ Private Function ProcessContract_Internal(contractNo As String, wsEStaffing As W
     fields(10) = Format(DateSerial(Year(targetDate), Month(targetDate) + 1, 0), "yyyy/mm/dd")
 
     Dim dayData As Variant
-    Dim dayCounter As Long
-    dayCounter = 0
     For Each dayData In dataRows
+
+        Dim dayOfMonth As Long
+        dayOfMonth = Day(CDate(dayData("Date")))
+        If dayOfMonth < 1 Or dayOfMonth > 31 Then GoTo NextDay
 
         Dim category As String
         category = CStr(dayData("Category"))
@@ -1243,8 +1245,7 @@ Private Function ProcessContract_Internal(contractNo As String, wsEStaffing As W
         If category = "2" Then holidayDays = holidayDays + 1
 
         Dim baseCol As Long
-        baseCol = 22 + dayCounter * 14
-        dayCounter = dayCounter + 1
+        baseCol = 22 + (dayOfMonth - 1) * 14
         fields(baseCol) = Format(CDate(dayData("Date")), "yyyy/mm/dd")
         fields(baseCol + 1) = category
 
