@@ -1230,6 +1230,18 @@ Private Function ProcessContract_Internal(contractNo As String, wsEStaffing As W
     fields(9) = Year(targetDate) & "/" & Format(Month(targetDate), "00")
     fields(10) = Format(DateSerial(Year(targetDate), Month(targetDate) + 1, 0), "yyyy/mm/dd")
 
+
+    Dim daysInMonth As Long
+    Dim d As Long
+    Dim initBaseCol As Long
+    daysInMonth = Day(DateSerial(Year(targetDate), Month(targetDate) + 1, 0))
+
+    ' 月内の日付枠は先に全日分を初期化（カテゴリは既定で休日=2）
+    For d = 1 To daysInMonth
+        initBaseCol = 22 + (d - 1) * 14
+        fields(initBaseCol) = Format(DateSerial(Year(targetDate), Month(targetDate), d), "yyyy/mm/dd")
+        fields(initBaseCol + 1) = "2"
+    Next d
     Dim dayData As Variant
     For Each dayData In dataRows
 
