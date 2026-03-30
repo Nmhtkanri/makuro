@@ -686,7 +686,7 @@ Private Sub Step3_請求明細作成()
     For i = 7 To MR2
         WriteLog "[Step3-6] 行" & i & " F列=" & Nz(ws2.Cells(i, 6).Value)
 
-        ws2.Cells(i, 3).Value = "BHM" & Format(valK1, "yyyymmdd") & ws2.Cells(i, 6)
+        ws2.Cells(i, 3).Value = "BHM" & p_DateStr & p_TimeStr & ws2.Cells(i, 6)
         ws2.Cells(i, 4).Value = 1
         ws2.Cells(i, 9).NumberFormatLocal = "@"
         ws2.Cells(i, 9).Value = Format(valK1, "yyyy") & "/" & Format(valK1, "mm")
@@ -1208,7 +1208,7 @@ Private Function ProcessContract_Internal(contractNo As String, wsEStaffing As W
     fields(8) = jobCode
 
     ' --- 請求書コード: BH/BDファイルと同じコード体系で生成 ---
-    fields(3) = "BHM" & Format(p_wsMain.Range("K1").Value, "yyyymmdd") & jobCode
+    fields(3) = "BHM" & p_DateStr & p_TimeStr & jobCode
 
     ' --- 請求書明細コード: 契約No（BD明細との紐づけ） ---
     fields(4) = contractNo
@@ -1234,9 +1234,9 @@ Private Function ProcessContract_Internal(contractNo As String, wsEStaffing As W
     Dim daysInMonth As Long
     Dim d As Long
     Dim initBaseCol As Long
-    daysInMonth = Day(DateSerial(Year(targetDate), Month(targetDate) + 1, 0))
+    daysInMonth = 31
 
-    ' 月内の日付枠は先に全日分を初期化（カテゴリは既定で休日=2）
+    ' 勤怠取込仕様に合わせ、日付枠は31日分を固定で初期化（カテゴリ既定=休日2）
     For d = 1 To daysInMonth
         initBaseCol = 22 + (d - 1) * 14
         fields(initBaseCol) = Format(DateSerial(Year(targetDate), Month(targetDate), d), "yyyy/mm/dd")
