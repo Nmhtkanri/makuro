@@ -1027,9 +1027,9 @@ Private Sub Step7_提出データファイル作成()
     wb2.Sheets(1).Cells.NumberFormatLocal = "@"
     wb2.Sheets(1).Columns(1).Delete
     wb2.Sheets(1).Rows("1:6").Delete
-    Call TrimBlankRowsByKey(wb2.Sheets(1), 1)
     wb2.SaveAs fileName:=M_file, FileFormat:=xlText
     wb2.Close SaveChanges:=False
+    Call RemovePureBlankLines(M_file)
     WriteLog "[Step7] BDファイル出力完了"
 
     ' ヘッダ出力
@@ -1044,16 +1044,40 @@ Private Sub Step7_提出データファイル作成()
 End Sub
 
 
-Private Sub TrimBlankRowsByKey(ws As Worksheet, keyCol As Long)
-    Dim lastRow As Long
-    Dim r As Long
 
-    lastRow = ws.Cells(ws.Rows.Count, keyCol).End(xlUp).Row
-    For r = lastRow To 1 Step -1
-        If Len(Trim$(CStr(ws.Cells(r, keyCol).Value))) = 0 Then
-            ws.Rows(r).Delete
+Private Sub RemovePureBlankLines(filePath As String)
+    On Error GoTo ExitPoint
+    Dim f As Integer
+    Dim txt As String
+    Dim lines() As String
+    Dim outText As String
+    Dim i As Long
+
+    If Dir(filePath) = "" Then Exit Sub
+
+    f = FreeFile
+    Open filePath For Input As #f
+    txt = Input$(LOF(f), #f)
+    Close #f
+    f = 0
+
+    lines = Split(txt, vbCrLf)
+    For i = LBound(lines) To UBound(lines)
+        If Len(lines(i)) > 0 Then
+            If outText <> "" Then outText = outText & vbCrLf
+            outText = outText & lines(i)
         End If
-    Next r
+    Next i
+
+    f = FreeFile
+    Open filePath For Output As #f
+    Print #f, outText;
+    Close #f
+    f = 0
+
+ExitPoint:
+    On Error Resume Next
+    If f > 0 Then Close #f
 End Sub
 
 Private Sub Step8_ExportTimecardData()
