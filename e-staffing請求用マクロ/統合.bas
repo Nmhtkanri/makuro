@@ -1027,6 +1027,7 @@ Private Sub Step7_提出データファイル作成()
     wb2.Sheets(1).Cells.NumberFormatLocal = "@"
     wb2.Sheets(1).Columns(1).Delete
     wb2.Sheets(1).Rows("1:6").Delete
+    Call TrimBlankRowsByKey(wb2.Sheets(1), 1)
     wb2.SaveAs fileName:=M_file, FileFormat:=xlText
     wb2.Close SaveChanges:=False
     WriteLog "[Step7] BDファイル出力完了"
@@ -1040,6 +1041,19 @@ Private Sub Step7_提出データファイル作成()
     wb3.SaveAs fileName:=Hd_file, FileFormat:=xlText
     wb3.Close SaveChanges:=False
     WriteLog "[Step7] BHファイル出力完了"
+End Sub
+
+
+Private Sub TrimBlankRowsByKey(ws As Worksheet, keyCol As Long)
+    Dim lastRow As Long
+    Dim r As Long
+
+    lastRow = ws.Cells(ws.Rows.Count, keyCol).End(xlUp).Row
+    For r = lastRow To 1 Step -1
+        If Len(Trim$(CStr(ws.Cells(r, keyCol).Value))) = 0 Then
+            ws.Rows(r).Delete
+        End If
+    Next r
 End Sub
 
 Private Sub Step8_ExportTimecardData()
@@ -1081,7 +1095,6 @@ Private Sub Step8_ExportTimecardData()
         outputLine = ProcessContract_Internal(CStr(contractItem), wsEStaffing, wsWebTC, tcCounter)
         If outputLine <> "" Then
             outputLines.Add outputLine
-            tcCounter = tcCounter + 1
         End If
     Next contractItem
 
