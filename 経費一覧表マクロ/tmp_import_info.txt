@@ -1,0 +1,18 @@
+﻿Sheets: 給与振込一覧, 入力例, Q-meisai, S-meisai, 
+Sheet: 給与振込一覧, Rows: 231, Cols: 10
+Col1: 株式会社エヌエム・ヒューマテック
+Col2: 
+Col3: 
+Col4: 
+Col5: 
+Col6: 
+Col7: 
+Col8: 
+Col9: 
+Col10: 
+
+=== Sample Data (Rows 2-5) ===
+Row2: 給与振込一覧表 |  |  |  |  |  |  |  |  | 
+Row3: 振込件数 | 振込人数 | 支給額合計 |  |  |  |  |  |  | 楽たす給与振込 ログイン画面へ
+Row4: 0 件 | 0 人 | 0 円 |  |  |  |  |  |  | 
+Row5:  |  |  |  |  |  |  |  | 　　　　　　　　　　*は入力必須項目です | 
