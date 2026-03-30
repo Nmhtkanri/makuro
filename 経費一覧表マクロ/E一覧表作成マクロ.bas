@@ -926,7 +926,7 @@ Public Sub Append_jinjer_CSV_to_経費統合一覧表()
 
     ' 2. CSVを開く
     Dim wbCSV As Workbook
-    Set wbCSV = Workbooks.Open(Filename:=CStr(csvPath), Local:=True)
+    Set wbCSV = Workbooks.Open(fileName:=CStr(csvPath), Local:=True)
     Dim wsCSV As Worksheet
     Set wsCSV = wbCSV.Worksheets(1)
 
@@ -949,7 +949,7 @@ Public Sub Append_jinjer_CSV_to_経費統合一覧表()
     csvHeaders.CompareMode = 1
     Dim c As Long, hdr As String
     For c = 1 To csvLastCol
-        hdr = Trim$(CStr(wsCSV.Cells(1, c).Value))
+        hdr = Trim$(CStr(wsCSV.Cells(1, c).value))
         If hdr <> "" Then csvHeaders.Add hdr, c
     Next c
 
@@ -960,7 +960,7 @@ Public Sub Append_jinjer_CSV_to_経費統合一覧表()
     Set dstHeaders = CreateObject("Scripting.Dictionary")
     dstHeaders.CompareMode = 1
     For c = 1 To dstLastCol
-        hdr = Trim$(CStr(wsDst.Cells(1, c).Value))
+        hdr = Trim$(CStr(wsDst.Cells(1, c).value))
         If hdr <> "" Then dstHeaders.Add hdr, c
     Next c
 
@@ -997,16 +997,16 @@ Public Sub Append_jinjer_CSV_to_経費統合一覧表()
 
     ' 9. CSVデータループ
     Dim csvLastRow As Long
-    csvLastRow = wsCSV.Cells(wsCSV.Rows.Count, 1).End(xlUp).Row
+    csvLastRow = wsCSV.Cells(wsCSV.rows.Count, 1).End(xlUp).Row
     Dim wr As Long: wr = dstStartRow
     Dim r As Long
     For r = 2 To csvLastRow
-        If Trim$(CStr(wsCSV.Cells(r, 1).Value)) = "" And _
-           Trim$(CStr(wsCSV.Cells(r, 2).Value)) = "" Then GoTo NextCSVRow
+        If Trim$(CStr(wsCSV.Cells(r, 1).value)) = "" And _
+           Trim$(CStr(wsCSV.Cells(r, 2).value)) = "" Then GoTo NextCSVRow
 
         Dim dstCol As Variant
         For Each dstCol In colMap.Keys
-            wsDst.Cells(wr, CLng(dstCol)).Value = wsCSV.Cells(r, colMap(dstCol)).Value
+            wsDst.Cells(wr, CLng(dstCol)).value = wsCSV.Cells(r, colMap(dstCol)).value
         Next dstCol
         wr = wr + 1
 NextCSVRow:
