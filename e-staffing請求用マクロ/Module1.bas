@@ -80,6 +80,19 @@ Sub 取込み3()
     myFile1 = Dir(myFile)
     Workbooks(myFile1).Close SaveChanges:=False
 End Sub
+Private Function ResolveWebTCJobCode(ws As Worksheet, headerRow As Long) As String
+    Dim primaryCode As String
+    Dim fallbackCode As String
+
+    primaryCode = Trim$(CStr(ws.Cells(headerRow, 5).Value))
+    If primaryCode <> "" Then
+        ResolveWebTCJobCode = primaryCode
+        Exit Function
+    End If
+
+    fallbackCode = Trim$(CStr(ws.Cells(headerRow, 9).Value))
+    ResolveWebTCJobCode = fallbackCode
+End Function
 Sub 名簿2作成()
     ' 名簿シートからデータをActiveSheetにコピー
     Application.ScreenUpdating = False
@@ -161,7 +174,7 @@ Sub webTCデータの抽出()
             endt = Format(dtt * (hc_cnt_max / i - 1), "hh:nn:ss")
         End If
         
-        JOB_C = ws2.Cells(HC(i), 5).Value
+        JOB_C = ResolveWebTCJobCode(ws2, HC(i))
         S_name = ws2.Cells(HC(i), 6).Value
         
         Application.StatusBar = "データ抽出中：" & S_name & " " & i & "/" & hc_cnt_max & "件　残時間：" & endt

@@ -292,6 +292,21 @@ Private Function BuildInvoiceDetailCode(jobCode As String) As String
 
     BuildInvoiceDetailCode = "BNT" & Format(CDate(closingDateVal), "yyyymmdd") & trimmedJobCode
 End Function
+
+Private Function ResolveWebTCJobCode(ws As Worksheet, headerRow As Long) As String
+    Dim primaryCode As String
+    Dim fallbackCode As String
+
+    primaryCode = Trim$(CStr(ws.Cells(headerRow, 5).Value))
+    If primaryCode <> "" Then
+        ResolveWebTCJobCode = primaryCode
+        Exit Function
+    End If
+
+    fallbackCode = Trim$(CStr(ws.Cells(headerRow, 9).Value))
+    ResolveWebTCJobCode = fallbackCode
+End Function
+
 ' ==============================================================================
 ' Phase 2: データ準備（ファイルAのマクロを統合）
 ' ==============================================================================
@@ -353,7 +368,7 @@ Private Sub Phase2_webTCデータの抽出()
     ' 【修正】hc_cnt_max は「Hレコード数+1」のためループは -1 まで
     '         On Error GoTo errlab_extract を廃止し、エラーは MainErrorHandler へ伝播させる
     For i = 1 To hc_cnt_max - 1
-        JOB_C = ws2.Cells(HC(i), 5).Value
+        JOB_C = ResolveWebTCJobCode(ws2, HC(i))
         S_name = ws2.Cells(HC(i), 6).Value
 
         Application.StatusBar = "Step 5/" & TOTAL_STEPS & " webTCデータ抽出中：" & _
@@ -844,7 +859,7 @@ Private Sub Step4_請求ヘッダ作成()
     ws3.Range("E7").Value = "=+INDIRECT(""請求明細!I"" & ROW())"
     ws3.Range("F7").Value = "ual-nmht"
     ws3.Range("G7").Value = "=+INDIRECT(""請求明細!C"" & ROW())"
-    ws3.Range("H7").Value = "=""【"" & VLOOKUP(INDIRECT(""請求明細!F"" & ROW()),'e-staffing TCnmhtの最新情報'!U:V,2,0) &""】""& VLOOKUP(INDIRECT(""請求明細!F"" & ROW()),'e-staffing TCnmhtの最新情報'!U:CC,61,0)"
+    ws3.Range("H7").Value = "=""【"" & INDIRECT(""請求明細!G"" & ROW()) &""】""& VLOOKUP(INDIRECT(""請求明細!F"" & ROW()),'e-staffing TCnmhtの最新情報'!U:CC,61,0)"
     ws3.Range("I7").Value = "=+INDIRECT(""請求明細!J"" & ROW())"
     ws3.Range("J7").Value = "=+INDIRECT(""請求明細!K"" & ROW())"
     ws3.Range("K7").Value = "=+INDIRECT(""請求明細!K"" & ROW())"
@@ -1216,7 +1231,7 @@ Private Function ProcessContract_Internal(contractNo As String, wsEStaffing As W
 
     For j = 1 To lastRow
         If wsWebTC.Cells(j, 1).Value = "H" And wsWebTC.Cells(j, 2).Value = contractNo Then
-            jobCode = wsWebTC.Cells(j, 5).Value
+            jobCode = ResolveWebTCJobCode(wsWebTC, j)
             foundH = True
         ElseIf wsWebTC.Cells(j, 1).Value = "D" And foundH Then
             Dim rowCategory As String

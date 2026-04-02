@@ -410,7 +410,7 @@ Private Sub Step4_¿‹ƒwƒbƒ_ì¬()
     ws3.Range("E7").Value = "=+¿‹–¾×!I7"
     ws3.Range("F7").Value = "ual-nmht"
     ws3.Range("G7").Value = "=+¿‹–¾×!C7"
-    ws3.Range("H7").Value = "=""y"" & VLOOKUP(¿‹–¾×!F7,'e-staffing TCnmht‚ÌÅVî•ñ'!U:V,2,0) &""z""& VLOOKUP(¿‹–¾×!F7,'e-staffing TCnmht‚ÌÅVî•ñ'!U:CC,61,0)"
+    ws3.Range("H7").Value = "=""y"" & ¿‹–¾×!G7 &""z""& VLOOKUP(¿‹–¾×!F7,'e-staffing TCnmht‚ÌÅVî•ñ'!U:CC,61,0)"
     ws3.Range("I7").Value = "=+¿‹–¾×!J7"
     ws3.Range("J7").Value = "=+¿‹–¾×!K7"
     ws3.Range("K7").Value = "=+¿‹–¾×!K7"
@@ -614,6 +614,20 @@ Private Function BuildInvoiceDetailCode(jobCode As String) As String
     BuildInvoiceDetailCode = "BNT" & Format(CDate(closingDateVal), "yyyymmdd") & trimmedJobCode
 End Function
 
+Private Function ResolveWebTCJobCode(ws As Worksheet, headerRow As Long) As String
+    Dim primaryCode As String
+    Dim fallbackCode As String
+
+    primaryCode = Trim$(CStr(ws.Cells(headerRow, 5).Value))
+    If primaryCode <> "" Then
+        ResolveWebTCJobCode = primaryCode
+        Exit Function
+    End If
+
+    fallbackCode = Trim$(CStr(ws.Cells(headerRow, 9).Value))
+    ResolveWebTCJobCode = fallbackCode
+End Function
+
 Private Sub Step8_ExportTimecardData()
     Dim wsEStaffing As Worksheet
     Dim wsWebTC As Worksheet
@@ -738,7 +752,7 @@ Private Function ProcessContract_Internal(contractNo As String, wsEStaffing As W
 
     For j = 1 To lastRow
         If wsWebTC.Cells(j, 1).Value = "H" And wsWebTC.Cells(j, 2).Value = contractNo Then
-            jobCode = wsWebTC.Cells(j, 5).Value
+            jobCode = ResolveWebTCJobCode(wsWebTC, j)
             foundH = True
         ElseIf wsWebTC.Cells(j, 1).Value = "D" And foundH Then
             Dim rowCategory As String
