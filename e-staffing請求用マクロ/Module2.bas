@@ -290,7 +290,7 @@ Private Sub Step3_請求明細作成()
     MR2 = ws2.Cells(Rows.Count, 3).End(xlUp).Row
     
     For i = 7 To MR2
-        ws2.Cells(i, 3).Value = "BHM" & Format(ws1.Range("K1").Value, "yyyymmdd") & ws2.Cells(i, 6)
+        ws2.Cells(i, 3).Value = BuildInvoiceDetailCode(CStr(ws2.Cells(i, 6).Value))
         ws2.Cells(i, 4).Value = 1
         ws2.Cells(i, 9).NumberFormatLocal = "@"
         ws2.Cells(i, 9).Value = Format(ws1.Range("K1").Value, "yyyy") & "/" & Format(ws1.Range("K1").Value, "mm")
@@ -597,8 +597,24 @@ Private Sub Step7_提出データファイル作成()
     wb3.Close SaveChanges:=False
 End Sub
 
+Private Function BuildInvoiceDetailCode(jobCode As String) As String
+    Dim closingDateVal As Variant
+    Dim trimmedJobCode As String
+
+    closingDateVal = p_wsMain.Range("K1").Value
+    If Not IsDate(closingDateVal) Then
+        Err.Raise 2101, , "勤務データシートのK1セルが日付ではないため、請求書明細コードを生成できません。"
+    End If
+
+    trimmedJobCode = Trim$(jobCode)
+    If trimmedJobCode = "" Then
+        Err.Raise 2102, , "Jobコードが空白のため、請求書明細コードを生成できません。"
+    End If
+
+    BuildInvoiceDetailCode = "BNT" & Format(CDate(closingDateVal), "yyyymmdd") & trimmedJobCode
+End Function
+
 Private Sub Step8_ExportTimecardData()
-    ' コード②の統合・修正版
     Dim wsEStaffing As Worksheet
     Dim wsWebTC As Worksheet
     Dim fileName As String
@@ -609,14 +625,13 @@ Private Sub Step8_ExportTimecardData()
     Dim contractNo As String
     Dim contractNos As Collection
     Dim outputLines As Collection
-    
+
     Set wsEStaffing = ThisWorkbook.Worksheets("e-staffing TCnmhtの最新情報")
     Set wsWebTC = ThisWorkbook.Worksheets("webTC_data")
-    
-    ' 契約No収集
+
     Set contractNos = New Collection
     lastRow = wsWebTC.Cells(wsWebTC.Rows.Count, 1).End(xlUp).Row
-    
+
     For i = 1 To lastRow
         If wsWebTC.Cells(i, 1).Value = "H" Then
             contractNo = wsWebTC.Cells(i, 2).Value
@@ -625,28 +640,28 @@ Private Sub Step8_ExportTimecardData()
             On Error GoTo 0
         End If
     Next i
-    
+
     If contractNos.Count = 0 Then Err.Raise 2001, , "webTC_dataに処理対象の契約Noが見つかりません。"
-    
-    ' データ処理
+
     Set outputLines = New Collection
     Dim contractItem As Variant
     Dim outputLine As String
-    Dim errMsg As String
-    
+    Dim tcCounter As Long
+    tcCounter = 1
+
     For Each contractItem In contractNos
-        outputLine = ProcessContract_Internal(CStr(contractItem), wsEStaffing, wsWebTC)
+        outputLine = ProcessContract_Internal(CStr(contractItem), wsEStaffing, wsWebTC, tcCounter)
         If outputLine <> "" Then
             outputLines.Add outputLine
+            tcCounter = tcCounter + 1
         End If
     Next contractItem
-    
+
     If outputLines.Count = 0 Then Err.Raise 2002, , "BTファイルの出力データがありません。"
-    
-    ' ファイル出力
+
     fileName = "BT" & p_DateStr & p_TimeStr & ".txt"
     outputPath = p_FolderPath & "\" & fileName
-    
+
     fileNum = FreeFile
     Open outputPath For Output As #fileNum
     Dim line As Variant
@@ -654,37 +669,62 @@ Private Sub Step8_ExportTimecardData()
         Print #fileNum, line
     Next line
     Close #fileNum
+
+    Dim wsKintai As Worksheet
+    On Error Resume Next
+    Set wsKintai = ThisWorkbook.Worksheets("勤怠 (就業場所区分あり)")
+    On Error GoTo 0
+
+    If Not wsKintai Is Nothing Then
+        Dim lastRowKintai As Long
+        lastRowKintai = wsKintai.Cells(wsKintai.Rows.Count, 2).End(xlUp).Row
+        If lastRowKintai >= 7 Then
+            wsKintai.Range("B7:QS" & lastRowKintai).ClearContents
+        End If
+
+        Dim rowIdx As Long
+        rowIdx = 7
+        Dim lineItem As Variant
+        For Each lineItem In outputLines
+            Dim parts() As String
+            parts = Split(CStr(lineItem), vbTab)
+            Dim colIdx As Long
+            For colIdx = 0 To UBound(parts)
+                wsKintai.Cells(rowIdx, 2 + colIdx).Value = parts(colIdx)
+            Next colIdx
+            rowIdx = rowIdx + 1
+        Next lineItem
+    End If
 End Sub
 
-Private Function ProcessContract_Internal(contractNo As String, wsEStaffing As Worksheet, wsWebTC As Worksheet) As String
+Private Function ProcessContract_Internal(contractNo As String, wsEStaffing As Worksheet, wsWebTC As Worksheet, tcNumber As Long) As String
     Dim fields() As String
     ReDim fields(1 To 500)
     Dim i As Long
     For i = 1 To 500
         fields(i) = ""
     Next i
-    
+
     fields(2) = contractNo
-    
+
     Dim contractRow As Long
     contractRow = FindContractRow_Internal(wsEStaffing, contractNo)
     If contractRow = 0 Then Err.Raise 2003, , "契約No " & contractNo & " がe-staffingシートに見つかりません。"
-    
+
     Dim cStart As Variant, cEnd As Variant, cBreak As Variant
     cStart = wsEStaffing.Cells(contractRow, 46).Value
     cEnd = wsEStaffing.Cells(contractRow, 47).Value
     cBreak = wsEStaffing.Cells(contractRow, 49).Value
-    
+
     If IsEmpty(cStart) Or IsEmpty(cEnd) Or IsEmpty(cBreak) Then Err.Raise 2004, , contractNo & ": 勤務時間データが空白です。"
-    
+
     Dim startTimeValue As Date, endTimeValue As Date
     startTimeValue = IIf(IsDate(cStart), CDate(cStart), CDbl(cStart))
     endTimeValue = IIf(IsDate(cEnd), CDate(cEnd), CDbl(cEnd))
-    
+
     Dim contractWorkMin As Long
     contractWorkMin = DateDiff("n", startTimeValue, endTimeValue) - CLng(cBreak)
-    
-    ' webTCデータの取得
+
     Dim jobCode As String
     Dim dataRows As Collection
     Set dataRows = New Collection
@@ -692,18 +732,34 @@ Private Function ProcessContract_Internal(contractNo As String, wsEStaffing As W
     lastRow = wsWebTC.Cells(wsWebTC.Rows.Count, 1).End(xlUp).Row
     Dim j As Long, foundH As Boolean
     foundH = False
-    
+
+    Dim holidayDict As Object
+    Set holidayDict = BuildHolidayDict()
+
     For j = 1 To lastRow
         If wsWebTC.Cells(j, 1).Value = "H" And wsWebTC.Cells(j, 2).Value = contractNo Then
             jobCode = wsWebTC.Cells(j, 5).Value
             foundH = True
         ElseIf wsWebTC.Cells(j, 1).Value = "D" And foundH Then
-            If wsWebTC.Cells(j, 3).Value <> "" Then
+            Dim rowCategory As String
+            rowCategory = CStr(wsWebTC.Cells(j, 3).Value)
+
+            If rowCategory = "" Then
+                Dim rowDateVal As Variant
+                rowDateVal = wsWebTC.Cells(j, 2).Value
+                If IsDate(rowDateVal) Then
+                    If holidayDict.Exists(Format(CDate(rowDateVal), "yyyy/mm/dd")) Then
+                        rowCategory = "2"
+                    End If
+                End If
+            End If
+
+            If rowCategory <> "" Then
                 Dim dataRow As Object
                 Set dataRow = CreateObject("Scripting.Dictionary")
                 dataRow("Row") = j
                 dataRow("Date") = wsWebTC.Cells(j, 2).Value
-                dataRow("Category") = wsWebTC.Cells(j, 3).Value
+                dataRow("Category") = rowCategory
                 dataRow("StartTime") = wsWebTC.Cells(j, 4).Value
                 dataRow("EndTime") = wsWebTC.Cells(j, 5).Value
                 dataRow("BreakTime") = wsWebTC.Cells(j, 6).Value
@@ -713,61 +769,77 @@ Private Function ProcessContract_Internal(contractNo As String, wsEStaffing As W
             Exit For
         End If
     Next j
-    
+
     If dataRows.Count = 0 Then Err.Raise 2005, , contractNo & ": webTC_dataにデータがありません。"
-    
+    If Trim$(jobCode) = "" Then Err.Raise 2006, , contractNo & ": Jobコードが取得できません。"
+
     fields(8) = jobCode
-    
-    ' 集計ロジック
+    fields(3) = BuildInvoiceDetailCode(jobCode)
+    fields(4) = contractNo
+    fields(5) = CStr(tcNumber)
+    fields(6) = CStr(wsEStaffing.Cells(contractRow, 5).Value)
+    fields(7) = CStr(wsEStaffing.Cells(contractRow, 21).Value)
+
     Dim workDays As Long, absentDays As Long, holidayDays As Long
     Dim totalWorkMin As Long, totalContractMin As Long, totalOverMin As Long
-    
+
     Dim targetDate As Date
     targetDate = CDate(dataRows(1)("Date"))
     fields(9) = Year(targetDate) & "/" & Format(Month(targetDate), "00")
     fields(10) = Format(DateSerial(Year(targetDate), Month(targetDate) + 1, 0), "yyyy/mm/dd")
-    
+
+    Dim daysInMonth As Long
+    Dim d As Long
+    Dim initBaseCol As Long
+    daysInMonth = 31
+
+    For d = 1 To daysInMonth
+        initBaseCol = 22 + (d - 1) * 14
+        fields(initBaseCol) = Format(DateSerial(Year(targetDate), Month(targetDate), d), "yyyy/mm/dd")
+        fields(initBaseCol + 1) = "2"
+    Next d
+
     Dim dayData As Variant
     For Each dayData In dataRows
         Dim dayOfMonth As Long
         dayOfMonth = Day(CDate(dayData("Date")))
-        If dayOfMonth > 31 Then GoTo NextDay
-        
+        If dayOfMonth < 1 Or dayOfMonth > 31 Then GoTo NextDay
+
         Dim category As String
         category = CStr(dayData("Category"))
-        
+
         If category = "1" Then workDays = workDays + 1
         If category = "4" Then absentDays = absentDays + 1
         If category = "2" Then holidayDays = holidayDays + 1
-        
+
         Dim baseCol As Long
         baseCol = 22 + (dayOfMonth - 1) * 14
         fields(baseCol) = Format(CDate(dayData("Date")), "yyyy/mm/dd")
         fields(baseCol + 1) = category
-        
+
         If category = "1" Then
             Dim sVal As Variant, eVal As Variant, bVal As Variant
             sVal = dayData("StartTime")
             eVal = dayData("EndTime")
             bVal = dayData("BreakTime")
-            
+
             If IsEmpty(sVal) Or IsEmpty(eVal) Or IsEmpty(bVal) Then GoTo NextDay
-            
+
             Dim sTime As Date, eTime As Date, bTime As Date
             sTime = IIf(IsNumeric(sVal), CDbl(sVal), CDate(sVal))
             eTime = IIf(IsNumeric(eVal), CDbl(eVal), CDate(eVal))
             bTime = IIf(IsNumeric(bVal), CDbl(bVal), CDate(bVal))
-            
+
             fields(baseCol + 2) = Hour(sTime)
             fields(baseCol + 3) = Minute(sTime)
             fields(baseCol + 4) = Hour(eTime)
             fields(baseCol + 5) = Minute(eTime)
             fields(baseCol + 6) = Hour(bTime)
             fields(baseCol + 7) = Minute(bTime)
-            
+
             Dim actualWorkMin As Long, contractDayMin As Long, overDayMin As Long
             actualWorkMin = DateDiff("n", sTime, eTime) - (Hour(bTime) * 60 + Minute(bTime))
-            
+
             If actualWorkMin <= contractWorkMin Then
                 contractDayMin = actualWorkMin
                 overDayMin = 0
@@ -775,19 +847,19 @@ Private Function ProcessContract_Internal(contractNo As String, wsEStaffing As W
                 contractDayMin = contractWorkMin
                 overDayMin = actualWorkMin - contractWorkMin
             End If
-            
+
             fields(baseCol + 10) = contractDayMin \ 60
             fields(baseCol + 11) = contractDayMin Mod 60
             fields(baseCol + 12) = overDayMin \ 60
             fields(baseCol + 13) = overDayMin Mod 60
-            
+
             totalWorkMin = totalWorkMin + actualWorkMin
             totalContractMin = totalContractMin + contractDayMin
             totalOverMin = totalOverMin + overDayMin
         End If
 NextDay:
     Next dayData
-    
+
     fields(11) = workDays
     fields(12) = absentDays
     fields(13) = holidayDays
@@ -797,7 +869,7 @@ NextDay:
     fields(17) = totalContractMin Mod 60
     fields(18) = totalOverMin \ 60
     fields(19) = totalOverMin Mod 60
-    
+
     Dim maxCol As Long
     maxCol = 22 + 31 * 14 - 1
     Dim output As String
@@ -806,7 +878,7 @@ NextDay:
         If i > 2 Then output = output & vbTab
         output = output & fields(i)
     Next i
-    
+
     ProcessContract_Internal = output
 End Function
 
@@ -822,6 +894,38 @@ Private Function FindContractRow_Internal(ws As Worksheet, contractNo As String)
     FindContractRow_Internal = 0
 End Function
 
+Private Function BuildHolidayDict() As Object
+    Dim dict As Object
+    Set dict = CreateObject("Scripting.Dictionary")
+
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets("祝日表")
+    On Error GoTo 0
+
+    If ws Is Nothing Then
+        Set BuildHolidayDict = dict
+        Exit Function
+    End If
+
+    Dim lastRow As Long
+    lastRow = ws.Cells(ws.Rows.Count, 2).End(xlUp).Row
+
+    Dim i As Long
+    For i = 1 To lastRow
+        Dim cellVal As Variant
+        cellVal = ws.Cells(i, 2).Value
+        If IsDate(cellVal) Then
+            Dim key As String
+            key = Format(CDate(cellVal), "yyyy/mm/dd")
+            If Not dict.Exists(key) Then
+                dict.Add key, CStr(ws.Cells(i, 1).Value)
+            End If
+        End If
+    Next i
+
+    Set BuildHolidayDict = dict
+End Function
 Private Sub Step9_Method()
     ' ZIP作成処理
     Dim objFSO As Object

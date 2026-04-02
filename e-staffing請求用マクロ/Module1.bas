@@ -9,14 +9,12 @@ Option Explicit
 Sub 取込み()
     ' WebTimeCardの勤怠処理ダウンロードデータを取り込む(TXT)
     Dim ws1 As Worksheet
-    Dim wb1 As Workbook
     Dim myFile As Variant
     Dim myFile1 As String
-    
+
     Set ws1 = ActiveSheet
-    Set wb1 = ActiveWorkbook
-    
-    myFile = Application.GetOpenFilename("TEXTファイル(*.txt),TCH*.txt")
+
+    myFile = Application.GetOpenFilename("TEXTファイル(*.txt),*.txt")
 
     If VarType(myFile) = vbBoolean Then
         MsgBox "キャンセルされました"
@@ -24,50 +22,36 @@ Sub 取込み()
     Else
         MsgBox myFile & " が選択されました"
     End If
-    
+
     Workbooks.Open myFile
-    Cells.Select
-    Selection.Copy
-    
-    wb1.Activate
-    ws1.Range("A1").Select
-    ActiveSheet.Paste
-    
+    ws1.Cells.ClearContents
+    ActiveWorkbook.ActiveSheet.UsedRange.Copy Destination:=ws1.Range("A1")
+
     myFile1 = Dir(myFile)
     Workbooks(myFile1).Close SaveChanges:=False
 End Sub
 
 Sub 取込み2()
-    ' WebTimeCardの勤怠処理ダウンロードデータを取り込む(CSV - ADVC)
+    ' WebTimeCardの勤怠処理ダウンロードデータを取り込む(CSV - 立替金)
     Dim ws1 As Worksheet
-    Dim wb1 As Workbook
     Dim myFile As Variant
     Dim myFile1 As String
-    
+
     Set ws1 = ActiveSheet
-    Set wb1 = ActiveWorkbook
-    
-    myFile = Application.GetOpenFilename("CSVファイル(*.csv),ADVC*.csv")
-    
+
+    myFile = Application.GetOpenFilename("CSVファイル(*.csv),*.csv")
+
     If VarType(myFile) = vbBoolean Then
         MsgBox "キャンセルされました"
         Exit Sub
     End If
-    
-    If Dir(myFile) = "ADVC*" Then
-        MsgBox "OK"
-    End If
-    
+
     MsgBox Dir(myFile) & " が選択されました"
-    
+
     Workbooks.Open myFile
-    Cells.Select
-    Selection.Copy
-    
-    wb1.Activate
-    ws1.Range("A1").Select
-    ActiveSheet.Paste
-    
+    ws1.Cells.ClearContents
+    ActiveWorkbook.ActiveSheet.UsedRange.Copy Destination:=ws1.Range("A1")
+
     myFile1 = Dir(myFile)
     Workbooks(myFile1).Close SaveChanges:=False
 End Sub
@@ -75,38 +59,27 @@ End Sub
 Sub 取込み3()
     ' e-Staffing契約データを取り込む(CSV - TCnmht)
     Dim ws1 As Worksheet
-    Dim wb1 As Workbook
     Dim myFile As Variant
     Dim myFile1 As String
-    
+
     Set ws1 = ActiveSheet
-    Set wb1 = ActiveWorkbook
-    
-    myFile = Application.GetOpenFilename("CSVファイル(*.csv),ADVC*.csv")
-    
+
+    myFile = Application.GetOpenFilename("CSVファイル(*.csv),*.csv")
+
     If VarType(myFile) = vbBoolean Then
         MsgBox "キャンセルされました"
         Exit Sub
     End If
-    
-    If Dir(myFile) = "TCnmht*" Then
-        MsgBox "OK"
-    End If
-    
+
     MsgBox Dir(myFile) & " が選択されました"
-    
+
     Workbooks.Open myFile
-    Cells.Select
-    Selection.Copy
-    
-    wb1.Activate
-    ws1.Range("A1").Select
-    ActiveSheet.Paste
-    
+    ws1.Cells.ClearContents
+    ActiveWorkbook.ActiveSheet.UsedRange.Copy Destination:=ws1.Range("A1")
+
     myFile1 = Dir(myFile)
     Workbooks(myFile1).Close SaveChanges:=False
 End Sub
-
 Sub 名簿2作成()
     ' 名簿シートからデータをActiveSheetにコピー
     Application.ScreenUpdating = False

@@ -42,16 +42,16 @@ Sub 一括処理()
     Dim fileTCnmht As Variant    ' e-staffing用 (TCnmht*.csv)
 
     fileTCH = Application.GetOpenFilename( _
-        "TEXTファイル(*.txt),TCH*.txt", , _
-        "【1/3】WebTimeCard勤怠データ(TCH*.txt)を選択してください")
+        "TEXTファイル(*.txt),*.txt", , _
+        "【1/3】WebTimeCard勤怠データ(TCH*.txt / 勤怠データダウンロード*.txt)を選択してください")
     If VarType(fileTCH) = vbBoolean Then
         MsgBox "キャンセルされました。処理を中断します。", vbExclamation, "中断"
         Exit Sub
     End If
 
     fileADVC = Application.GetOpenFilename( _
-        "CSVファイル(*.csv),ADVC*.csv", , _
-        "【2/3】立替金データ(ADVC*.csv)を選択してください")
+        "CSVファイル(*.csv),*.csv", , _
+        "【2/3】立替金データ(ADVC*.csv / 勤怠データダウンロード_立替金*.csv)を選択してください")
     If VarType(fileADVC) = vbBoolean Then
         MsgBox "キャンセルされました。処理を中断します。", vbExclamation, "中断"
         Exit Sub
@@ -262,27 +262,36 @@ Private Function Nz(v As Variant, Optional defaultVal As String = "") As String
         On Error GoTo 0
     End If
 End Function
-
 Private Sub ImportFileToSheet(filePath As String, targetSheetName As String)
-    ' ファイルを開いて全セルをコピーし、対象シートのA1に貼り付けて閉じる
+    ' ファイルを開いて使用範囲をコピーし、対象シートのA1に貼り付けて閉じる
     Dim wsTarget As Worksheet
     Dim wbSource As Workbook
 
     Set wsTarget = ThisWorkbook.Worksheets(targetSheetName)
 
     Set wbSource = Workbooks.Open(filePath)
-    wbSource.ActiveSheet.Cells.Copy
-
-    ThisWorkbook.Activate
-    wsTarget.Select
-    wsTarget.Range("A1").Select
-    ActiveSheet.Paste
-    Application.CutCopyMode = False
+    wsTarget.Cells.ClearContents
+    wbSource.ActiveSheet.UsedRange.Copy Destination:=wsTarget.Range("A1")
 
     wbSource.Close SaveChanges:=False
 End Sub
 
+Private Function BuildInvoiceDetailCode(jobCode As String) As String
+    Dim closingDateVal As Variant
+    Dim trimmedJobCode As String
 
+    closingDateVal = p_wsMain.Range("K1").Value
+    If Not IsDate(closingDateVal) Then
+        Err.Raise 2101, , "勤務データシートのK1セルが日付ではないため、請求書明細コードを生成できません。"
+    End If
+
+    trimmedJobCode = Trim$(jobCode)
+    If trimmedJobCode = "" Then
+        Err.Raise 2102, , "Jobコードが空白のため、請求書明細コードを生成できません。"
+    End If
+
+    BuildInvoiceDetailCode = "BNT" & Format(CDate(closingDateVal), "yyyymmdd") & trimmedJobCode
+End Function
 ' ==============================================================================
 ' Phase 2: データ準備（ファイルAのマクロを統合）
 ' ==============================================================================
@@ -672,7 +681,7 @@ Private Sub Step3_請求明細作成()
 
     Application.Calculation = xlCalculationManual
 
-    ' --- ブロック6: データ書込み（BHM～日付系）---
+    ' --- ブロック6: データ書込み（BNT明細コード・日付系）---
     MR2 = ws2.Cells(Rows.Count, 3).End(xlUp).Row
     WriteLog "[Step3-6] データ書込み開始 MR2=" & MR2
 
@@ -686,7 +695,7 @@ Private Sub Step3_請求明細作成()
     For i = 7 To MR2
         WriteLog "[Step3-6] 行" & i & " F列=" & Nz(ws2.Cells(i, 6).Value)
 
-        ws2.Cells(i, 3).Value = "BHM" & Format(valK1, "yyyymmdd") & ws2.Cells(i, 6)
+        ws2.Cells(i, 3).Value = BuildInvoiceDetailCode(CStr(ws2.Cells(i, 6).Value))
         ws2.Cells(i, 4).Value = 1
         ws2.Cells(i, 9).NumberFormatLocal = "@"
         ws2.Cells(i, 9).Value = Format(valK1, "yyyy") & "/" & Format(valK1, "mm")
@@ -1242,10 +1251,10 @@ Private Function ProcessContract_Internal(contractNo As String, wsEStaffing As W
 
     If dataRows.Count = 0 Then Err.Raise 2005, , contractNo & ": webTC_dataにデータがありません。"
 
-    fields(8) = jobCode
+    If Trim$(jobCode) = "" Then Err.Raise 2006, , contractNo & ": Jobコードが取得できません。"
 
     ' --- 請求書コード: BH/BDファイルと同じコード体系で生成 ---
-    fields(3) = "BHM" & Format(p_wsMain.Range("K1").Value, "yyyymmdd") & jobCode
+    fields(3) = BuildInvoiceDetailCode(jobCode)
 
     ' --- 請求書明細コード: 契約No（BD明細との紐づけ） ---
     fields(4) = contractNo
