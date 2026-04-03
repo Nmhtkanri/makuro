@@ -19,6 +19,7 @@ Sub AutoCheck_And_SendMail()
     Dim seisanAmount As String
     Dim useBCCCheck As Boolean
     Dim bccAddress As String
+    Dim mailCount As Long
     
     Set wsMail = ThisWorkbook.Sheets("ƒ[ƒ‹‘—M")
     Set wsCSV = ThisWorkbook.Sheets("ˆêÄ‘—MLOG")
@@ -66,6 +67,7 @@ Sub AutoCheck_And_SendMail()
         lastCSVRow = wsCSV.Cells(wsCSV.Rows.Count, "A").End(xlUp).Row
     End If
     
+    mailCount = 0
     For i = 4 To lastMailRow
         If wsMail.Cells(i, "A").Value = True Then
             empName = wsMail.Cells(i, "C").Value
@@ -84,7 +86,7 @@ Sub AutoCheck_And_SendMail()
             
             mailBody = Replace(baseBody, "[‘ÎÛŽÒ–¼]", empName)
             mailBody = Replace(mailBody, "[¸ŽZŠz]", seisanAmount)
-            mailBody = empName & "—l" & vbCrLf & vbCrLf & mailBody
+            mailBody = empName & "‚³‚ñ" & vbCrLf & vbCrLf & mailBody
             
             ' CC
             If useE3Check Then
@@ -114,6 +116,7 @@ Sub AutoCheck_And_SendMail()
                 End If
             End If
             
+            mailCount = mailCount + 1
             Set OutMail = OutApp.CreateItem(0)
             With OutMail
                 .To = wsMail.Cells(i, "D").Value
@@ -122,7 +125,11 @@ Sub AutoCheck_And_SendMail()
                 .Subject = subjectText
                 .Body = mailBody
                 .Importance = 2
-                .Display
+                If useBCCCheck And mailCount > 1 Then
+                    .Send
+                Else
+                    .Display
+                End If
             End With
             
             logRow = logWs.Cells(logWs.Rows.Count, "A").End(xlUp).Row + 1

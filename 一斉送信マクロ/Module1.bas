@@ -14,6 +14,7 @@ Sub SendMassMail_WithCC()
     Dim logRow As Long
     Dim useBCCCheck As Boolean
     Dim bccAddress As String
+    Dim mailCount As Long
     
     Set ws = ThisWorkbook.Sheets("ƒ[ƒ‹‘—M")
     Set OutApp = CreateObject("Outlook.Application")
@@ -34,12 +35,13 @@ Sub SendMassMail_WithCC()
     
     lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
     
+    mailCount = 0
     For i = 4 To lastRow
         If ws.Cells(i, "A").Value = True Or ws.Cells(i, "A").Value = "TRUE" Then
             empName = ws.Cells(i, "C").Value
             
             mailBody = Replace(baseBody, "[‘ÎÛŽÒ–¼]", empName)
-            mailBody = empName & "—l" & vbCrLf & vbCrLf & mailBody
+            mailBody = empName & "‚³‚ñ" & vbCrLf & vbCrLf & mailBody
             
             ' BCC
             bccAddress = ""
@@ -53,6 +55,7 @@ Sub SendMassMail_WithCC()
                 End If
             End If
             
+            mailCount = mailCount + 1
             Set OutMail = OutApp.CreateItem(0)
             With OutMail
                 .To = ws.Cells(i, "D").Value
@@ -61,7 +64,11 @@ Sub SendMassMail_WithCC()
                 .Subject = subjectText
                 .Body = mailBody
                 .Importance = 2
-                .Display
+                If useBCCCheck And mailCount > 1 Then
+                    .Send
+                Else
+                    .Display
+                End If
             End With
             
             logRow = logWs.Cells(logWs.Rows.Count, "A").End(xlUp).Row + 1
