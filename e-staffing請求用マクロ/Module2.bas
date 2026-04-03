@@ -291,7 +291,7 @@ Private Sub Step3_請求明細作成()
     
     For i = 7 To MR2
         ws2.Cells(i, 3).Value = BuildInvoiceDetailCode(CStr(ws2.Cells(i, 6).Value))
-        ws2.Cells(i, 4).Value = 1
+        ws2.Cells(i, 4).Value = BuildInvoiceDetailCode(CStr(ws2.Cells(i, 6).Value))
         ws2.Cells(i, 9).NumberFormatLocal = "@"
         ws2.Cells(i, 9).Value = Format(ws1.Range("K1").Value, "yyyy") & "/" & Format(ws1.Range("K1").Value, "mm")
         ws2.Cells(i, 10).Value = Format(ws1.Range("H1").Value, "yyyy/mm/dd")
@@ -788,9 +788,11 @@ Private Function ProcessContract_Internal(contractNo As String, wsEStaffing As W
     If Trim$(jobCode) = "" Then Err.Raise 2006, , contractNo & ": Jobコードが取得できません。"
 
     fields(8) = jobCode
-    fields(3) = BuildInvoiceDetailCode(jobCode)
-    fields(4) = contractNo
-    fields(5) = CStr(tcNumber)
+
+    Dim invoiceDetailCode As String
+    invoiceDetailCode = BuildInvoiceDetailCode(jobCode)
+    fields(3) = invoiceDetailCode
+    fields(4) = invoiceDetailCode
     fields(6) = CStr(wsEStaffing.Cells(contractRow, 5).Value)
     fields(7) = CStr(wsEStaffing.Cells(contractRow, 21).Value)
 

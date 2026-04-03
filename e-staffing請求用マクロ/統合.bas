@@ -711,7 +711,7 @@ Private Sub Step3_請求明細作成()
         WriteLog "[Step3-6] 行" & i & " F列=" & Nz(ws2.Cells(i, 6).Value)
 
         ws2.Cells(i, 3).Value = BuildInvoiceDetailCode(CStr(ws2.Cells(i, 6).Value))
-        ws2.Cells(i, 4).Value = 1
+        ws2.Cells(i, 4).Value = BuildInvoiceDetailCode(CStr(ws2.Cells(i, 6).Value))
         ws2.Cells(i, 9).NumberFormatLocal = "@"
         ws2.Cells(i, 9).Value = Format(valK1, "yyyy") & "/" & Format(valK1, "mm")
         ws2.Cells(i, 10).Value = Format(valH1, "yyyy/mm/dd")
@@ -1268,11 +1268,14 @@ Private Function ProcessContract_Internal(contractNo As String, wsEStaffing As W
 
     If Trim$(jobCode) = "" Then Err.Raise 2006, , contractNo & ": Jobコードが取得できません。"
 
-    ' --- 請求書コード: BH/BDファイルと同じコード体系で生成 ---
-    fields(3) = BuildInvoiceDetailCode(jobCode)
+    Dim invoiceDetailCode As String
+    invoiceDetailCode = BuildInvoiceDetailCode(jobCode)
 
-    ' --- 請求書明細コード: 契約No（BD明細との紐づけ） ---
-    fields(4) = contractNo
+    ' --- 請求書コード: BH/BDファイルと同じコード体系で生成 ---
+    fields(3) = invoiceDetailCode
+
+    ' --- 請求書明細コード: BDと同じコードを出力 ---
+    fields(4) = invoiceDetailCode
 
     ' --- タイムカード番号 ---
     fields(5) = CStr(tcNumber)
@@ -1282,6 +1285,9 @@ Private Function ProcessContract_Internal(contractNo As String, wsEStaffing As W
 
     ' --- スタッフコード: e-staffingシートから取得 ---
     fields(7) = CStr(wsEStaffing.Cells(contractRow, 21).Value)
+
+    ' --- Jobコード: 勤怠TXTの7列目へ出力 ---
+    fields(8) = jobCode
 
     Dim workDays As Long, absentDays As Long, holidayDays As Long
     Dim totalWorkMin As Long, totalContractMin As Long, totalOverMin As Long
