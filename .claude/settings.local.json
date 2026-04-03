@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e \":*)",
+      "Bash(python3 -c \":*)",
+      "Bash(python3:*)",
+      "Bash(node /tmp/edit_module2.js)",
+      "Bash(node \"//Nmht/NMHumaTach/マクロ保管場所谷津用/.claude/worktrees/crazy-jennings/../../../tmp_edit_module2.js\")",
+      "Bash(node \"//Nmht/NMHumaTach/マクロ保管場所谷津用/.claude/worktrees/crazy-jennings/edit_module2.js\")",
+      "Bash(node \"//Nmht/NMHumaTach/マクロ保管場所谷津用/.claude/worktrees/crazy-jennings/edit_module1.js\")",
+      "Read(///Nmht/NMHumaTach/マクロ保管場所谷津用/一斉送信マクロ/**)",
+      "Bash(node -e \"const b=require\\(''fs''\\).readFileSync\\(''//Nmht/NMHumaTach/マクロ保管場所谷津用/一斉送信マクロ/Module1.bas''\\); console.log\\(''No UTF-8 replacement chars:'', !b.includes\\(Buffer.from\\([0xef,0xbf,0xbd]\\)\\)\\)\")"
+    ]
+  }
+}
