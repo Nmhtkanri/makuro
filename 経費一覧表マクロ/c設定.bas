@@ -84,6 +84,9 @@ Public Sub Run_経費集計_設定シート版()
     ' 4) バックアップ作成後、出力
     BackupSheet SH_SUM
     Rewrite_Output agg, maxDate
+
+    ' 5) 仕訳データ手当の振り分け（R/S, T/U列）
+    仕訳データ手当振り分け_RS_TU
     
     MsgBox "集計が完了しました。" & vbCrLf & _
            "処理件数: " & hitCount & "件" & vbCrLf & _
