@@ -224,8 +224,8 @@ Private Function Collect_From_Source(ByRef agg As Object, ByRef maxDate As Objec
     cAmt = FindCol(ws, 1, Array("合計", "小計", "金額"))
     cFareAmt = FindCol(ws, 1, Array("金額(交通費)", "交通費金額", "交通費（円）", "交通費(円)"), True)
     cBooked = FindCol(ws, 1, Array("計上日", "計上", "計上日付"), True)
-    cEStaff = FindCol(ws, 1, Array("顧客請求費", "顧客対応", "顧客当番", "夜間当番", "24時間準直当番", "深夜出動", "24時間準直当番手当"), True)
-    If cEStaff = 0 Then cEStaff = 19 ' S列フォールバック
+    cEStaff = FindCol(ws, 1, Array("顧客請求費", "顧客対応", "顧客当番", "夜間当番", "24時間準直当番", "深夜出動", "24時間準直当番手当", "糊客請求分"), True)
+    If cEStaff = 0 Then cEStaff = 34 ' S列フォールバック
     
     If cEmpNo = 0 Or cName = 0 Or cUch = 0 Or cAmt = 0 Then
         MsgBox "必須列が見つからないため取り込み中止。" & vbCrLf & _
@@ -266,7 +266,7 @@ Private Function Collect_From_Source(ByRef agg As Object, ByRef maxDate As Objec
                 matchedKw = HitAnyCollection(desc, kwKokyakuNG)
                 If matchedKw = "" Then
                     ' 除外キーワードに該当しない → G列に加算
-                    If Not agg.Exists(key) Then agg.Add key, Array(0#, 0#, 0#, 0#, 0#, 0#)
+                    If Not agg.Exists(key) Then agg.Add key, Array(0#, 0#, 0#, 0#, 0#, 0#, 0#)
                     Dim b0: b0 = agg(key)
                     b0(5) = b0(5) + estAmt
                     agg(key) = b0
@@ -286,7 +286,7 @@ Private Function Collect_From_Source(ByRef agg As Object, ByRef maxDate As Objec
         End If
         
         If amt <> 0 Then
-            If Not agg.Exists(key) Then agg.Add key, Array(0#, 0#, 0#, 0#, 0#, 0#)
+            If Not agg.Exists(key) Then agg.Add key, Array(0#, 0#, 0#, 0#, 0#, 0#, 0#)
             Dim bucket: bucket = agg(key)
             
             ' キーワード判定（優先順位順）
@@ -317,7 +317,14 @@ Private Function Collect_From_Source(ByRef agg As Object, ByRef maxDate As Objec
                 GoTo Decided
             End If
             
-            ' 4. 交通費（NGワードチェック含む）
+            ' 4. 非課税精算(立替金)
+            If cTrans > 0 And InStr(1, trans, "交通費", vbTextCompare) > 0 Then
+                If Not estFilled Then bucket(6) = bucket(6) + amt
+                resultCat = "I:非課税精算"
+                GoTo Decided
+            End If
+            
+            ' 5. 交通費（NGワードチェック含む）
             matchedKw = HitAnyCollection(desc, kwTrans)
             If matchedKw = "" Then matchedKw = HitAnyCollection(trans, kwTrans)
             If matchedKw <> "" Then
@@ -334,7 +341,7 @@ Private Function Collect_From_Source(ByRef agg As Object, ByRef maxDate As Objec
                 GoTo Decided
             End If
             
-            ' 5. その他（どのキーワードにもマッチしない場合は無条件で計上）
+            ' 6. その他（どのキーワードにもマッチしない場合は無条件で計上）
             bucket(3) = bucket(3) + amt
             resultCat = "I:その他"
             matchedKw = "(該当キーワードなし)"
@@ -390,10 +397,11 @@ Private Sub Rewrite_Output(ByVal agg As Object, ByVal maxDate As Object)
         id = ParseEmpNo(CStr(k))
         If id <> "" Then
             arr = agg(k)
-            If Not byId.Exists(id) Then byId.Add id, Array(0#, 0#, 0#, 0#, 0#, 0#)
+            If Not byId.Exists(id) Then byId.Add id, Array(0#, 0#, 0#, 0#, 0#, 0#, 0#)
             Dim cur: cur = byId(id)
             cur(0) = cur(0) + arr(0): cur(1) = cur(1) + arr(1): cur(2) = cur(2) + arr(2)
             cur(3) = cur(3) + arr(3): cur(4) = cur(4) + arr(4): cur(5) = cur(5) + arr(5)
+            cur(6) = cur(6) + arr(6)
             byId(id) = cur
         End If
     Next k
@@ -427,13 +435,13 @@ Private Sub Rewrite_Output(ByVal agg As Object, ByVal maxDate As Object)
             ws.Cells(Z, COL_ALLOW2).value = Nz(vals(0)) + Nz(vals(1))  ' F: 手当2（D+E）
             ws.Cells(Z, COL_BILL).value = vals(5)       ' G: 顧客請求分
             ws.Cells(Z, COL_TRANS).value = vals(2)      ' H: 交通費
-            ws.Cells(Z, COL_NONTAX_TATEKAE).value = 0   ' I: 非課税精算(立替金) ＜ NEW
+            ws.Cells(Z, COL_NONTAX_TATEKAE).value = vals(6)   ' I: 非課税精算(立替金) ＜ NEW
             ws.Cells(Z, COL_ETC).value = vals(3)        ' J: その他
             ws.Cells(Z, COL_TW).value = vals(4)         ' K: テレワーク手当
             
             ' C: 合計 = D + E + G + H + I + J + K
             ws.Cells(Z, COL_TOTAL).value = Nz(vals(0)) + Nz(vals(1)) + Nz(vals(5)) + _
-                                            Nz(vals(2)) + 0 + Nz(vals(3)) + Nz(vals(4))
+                                            Nz(vals(2)) + Nz(vals(6)) + Nz(vals(3)) + Nz(vals(4))
             
             ' K: 計上日
             If dateById.Exists(empId) Then

@@ -73,8 +73,8 @@ Private Function Collect_From_Jinjer(ByRef agg As Object, ByRef maxDate As Objec
     cAmt = FindCol(ws, 1, Array("合計", "小計", "金額"))
     cFareAmt = FindCol(ws, 1, Array("金額(交通費)", "交通費金額", "交通費（円）", "交通費(円)"), True)
     cBooked = FindCol(ws, 1, Array("計上日", "計上", "計上日付"), True)
-    cEStaff = FindCol(ws, 1, Array("顧客請求費", "顧客請求費", "顧客対応", "顧客当番", "夜間当番", "24時間準直当番", "深夜出動", "24時間準直当番手当"), True)
-    If cEStaff = 0 Then cEStaff = 19 ' S列フォールバック
+    cEStaff = FindCol(ws, 1, Array("顧客請求費", "顧客請求費", "顧客対応", "顧客当番", "夜間当番", "24時間準直当番", "深夜出動", "24時間準直当番手当", "顧客請求分"), True)
+    If cEStaff = 0 Then cEStaff = 34 ' S列フォールバック
 
     If cEmpNo = 0 Or cName = 0 Or cUch = 0 Or cAmt = 0 Then
         MsgBox "必須列が見つからないため取り込み中止。" & vbCrLf & _

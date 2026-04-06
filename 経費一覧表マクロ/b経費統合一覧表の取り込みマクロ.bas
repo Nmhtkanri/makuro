@@ -1,4 +1,4 @@
-Attribute VB_Name = "b経費統合一覧表の取り込みマクロ"
+Attribute VB_Name = "b経費統合一覧表取込マクロ"
 ' ==========================================
 '  本社経費 → 経費統合一覧表
 ' ==========================================
@@ -66,15 +66,16 @@ Public Sub Append_本社経費_to_経費統合一覧表()
     If dstStartRow < 2 Then dstStartRow = 2
 
     ' =========================================================
-    ' 4. 配列準備（行数 × 19列）
+    ' 4. 配列準備（行数 × 34列）
     ' =========================================================
     Dim arr() As Variant
-    ReDim arr(1 To rowsCount, 1 To 19)
+    ReDim arr(1 To rowsCount, 1 To 34)
 
     ' =========================================================
     ' 5. データ転記ループ
     ' =========================================================
     Dim i As Long, r As Long
+    Dim sG As String, sI As String
     
     For i = 1 To rowsCount
         r = i + 1 ' データは2行目から
@@ -91,7 +92,7 @@ Public Sub Append_本社経費_to_経費統合一覧表()
         ' D列(4): 合計 ← 金額(8列目) ★ここがポイント
         arr(i, 4) = wsSrc.Cells(r, cAmt).value
         
-        ' E列(5): 備考(申請書) ← （空欄）
+        arr(i, 5) = CStr(wsSrc.Cells(r, cTitle).value)
         
         ' F列(6): 利用日 ← 日付(5列目)
         arr(i, 6) = FormatDateStr(wsSrc.Cells(r, cDateUse).value)
@@ -99,19 +100,20 @@ Public Sub Append_本社経費_to_経費統合一覧表()
         ' G列(7): 交通機関 ← （空欄）
         
         ' H列(8): 内訳 ← 申請タイトル(3列目)
-        arr(i, 8) = CStr(wsSrc.Cells(r, cTitle).value)
+        arr(i, 8) = CStr(wsSrc.Cells(r, cSubj).value)
         
-        ' I列(9)～O列(15): （空欄）
+        arr(i, 16) = wsSrc.Cells(r, cAmt).value
         
-        ' P列(16): 備考(明細) ← 備考(9列目)
-        arr(i, 16) = CStr(wsSrc.Cells(r, cMemo).value)
-        
-        ' Q列(17): 計上日 ← （空欄）
-        
-        ' R列(18): 案件・目的 ← 内容(7列目)
-        arr(i, 18) = CStr(wsSrc.Cells(r, cCont).value)
-        
-        ' S列(19): 顧客請求費 ← （空欄）
+        sG = "": sI = ""
+        sG = CStr(wsSrc.Cells(r, cCont).value)
+        sI = CStr(wsSrc.Cells(r, cMemo).value)
+        If sG <> "" And sI <> "" Then
+            arr(i, 20) = sG & " / " & sI
+        ElseIf sG <> "" Then
+            arr(i, 20) = sG
+        Else
+            arr(i, 20) = sI
+        End If
         
     Next i
 
@@ -120,7 +122,7 @@ Public Sub Append_本社経費_to_経費統合一覧表()
     ' =========================================================
     With wsDst
         Dim targetRange As Range
-        Set targetRange = .Range(.Cells(dstStartRow, 1), .Cells(dstStartRow + rowsCount - 1, 19))
+        Set targetRange = .Range(.Cells(dstStartRow, 1), .Cells(dstStartRow + rowsCount - 1, 34))
         
         ' 書式を文字列に設定
         targetRange.NumberFormat = "@"

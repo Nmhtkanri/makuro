@@ -44,38 +44,64 @@ Attribute VB_Name = "E一覧表作成マクロ"
         Dim rowsToCopy As Long
         rowsToCopy = srcLastRow - SRC_START_ROW + 1
         
-        ' --- Part A: cols 1-8 (unchanged position) ---
-        Dim srcRangeA As Range, dstRangeA As Range
-        Set srcRangeA = wsSrc.Range(wsSrc.Cells(SRC_START_ROW, 1), wsSrc.Cells(srcLastRow, 8))
-        Set dstRangeA = wsDst.Range(wsDst.Cells(dstStartRow, 1), wsDst.Cells(dstStartRow + rowsToCopy - 1, 8))
-        dstRangeA.value = srcRangeA.value
-        
-        ' --- Part B: old cols 9-17 -> new cols 13-21 ---
-        Dim srcRangeB As Range, dstRangeB As Range
-        Set srcRangeB = wsSrc.Range(wsSrc.Cells(SRC_START_ROW, 9), wsSrc.Cells(srcLastRow, 17))
-        Set dstRangeB = wsDst.Range(wsDst.Cells(dstStartRow, 13), wsDst.Cells(dstStartRow + rowsToCopy - 1, 21))
-        dstRangeB.value = srcRangeB.value
-        
-        ' --- Col 18 (old) removed; read full source for Q col check ---
+        ' --- Read all source data into array ---
         Dim v As Variant
         v = wsSrc.Range(wsSrc.Cells(SRC_START_ROW, COPY_FIRST_COL), _
                         wsSrc.Cells(srcLastRow, COPY_LAST_COL)).value
-    
-        ' ==== 追加処理: Q列が「立替精算書 (顧客請求分)」なら D列(合計)をS列にも入れる ====
-    Dim r As Long, srcRows As Long
-    Dim qVal As String
-    srcRows = UBound(v, 1) ' vはA:P（16列）の配列
-    
-    For r = 1 To srcRows
-        ' Q列は配列vに含めていないので、シートから直接読む
-        qVal = CStr(wsSrc.Cells(SRC_START_ROW + r - 1, 17).value) ' 17 = Q列
-    
-        If SameKey(qVal, "立替精算書(顧客請求分)") Then
-            ' D列=4（vから取る）／ S列=19 に書き込み
-            wsDst.Cells(dstStartRow + r - 1, 34).value = v(r, 4)
-        End If
-    Next r
-    ' ==== 追加ここまで ====
+
+        ' --- Build 34-column output array ---
+        Dim out() As Variant
+        ReDim out(1 To rowsToCopy, 1 To 34)
+
+        Dim r As Long
+        Dim sP As String, sR As String, qVal As String
+
+        For r = 1 To rowsToCopy
+            ' A-H: src cols 1-8 -> dst cols 1-8
+            out(r, 1) = v(r, 1)    ' A: -> A',
+            out(r, 2) = v(r, 2)    ' B: -> B
+            out(r, 3) = v(r, 3)    ' C: -> C
+            out(r, 4) = v(r, 4)    ' D: -> D
+            out(r, 5) = v(r, 5)    ' E: -> E
+            out(r, 6) = v(r, 6)    ' F: -> F
+            out(r, 7) = v(r, 7)    ' G: -> G
+            out(r, 8) = v(r, 8)    ' H: -> H
+            ' I-L (cols 9-12): skip (empty)
+            ' M-S: src cols 9-15 -> dst cols 13-19
+            out(r, 13) = v(r, 9)   ' I:->M',
+            out(r, 14) = v(r, 10)  ' J:->N
+            out(r, 15) = v(r, 11)  ' K:->O
+            out(r, 16) = v(r, 12)  ' L:->P
+            out(r, 17) = v(r, 13)  ' M:->Q
+            out(r, 18) = v(r, 14)  ' N:->R
+            out(r, 19) = v(r, 15)  ' O:->S
+            ' T(20): P(16) + R(18) combined
+            sP = ""
+            sR = ""
+            If Not IsEmpty(v(r, 16)) Then sP = CStr(v(r, 16))
+            If Not IsEmpty(v(r, 18)) Then sR = CStr(v(r, 18))
+            If sP <> "" And sR <> "" Then
+                out(r, 20) = sP & " / " & sR
+            ElseIf sP <> "" Then
+                out(r, 20) = sP
+            Else
+                out(r, 20) = sR
+            End If
+            ' AH(34): Q(17) -> if contains customer billing, set D amount
+            qVal = ""
+            If Not IsEmpty(v(r, 17)) Then qVal = CStr(v(r, 17))
+            If InStr(1, qVal, "顧客請求分", vbTextCompare) > 0 Then
+                out(r, 34) = v(r, 4)
+            End If
+        Next r
+
+        ' --- Write output ---
+        With wsDst
+            Dim dstRange As Range
+            Set dstRange = .Range(.Cells(dstStartRow, 1), .Cells(dstStartRow + rowsToCopy - 1, 34))
+            dstRange.NumberFormat = "@"
+            dstRange.value = out
+        End With
     
     
         MsgBox "追記完了！" & vbCrLf & _
@@ -167,76 +193,92 @@ ErrHandler:
         dstStartRow = Application.WorksheetFunction.Max(dstLastA, dstLastB) + 1
         If dstStartRow < ESTF_START_ROW Then dstStartRow = ESTF_START_ROW
     
-        ' 書き込み配列（全部文字列）
-        Dim arrB() As Variant, arrF() As Variant, arrP() As Variant
-        Dim arrG() As Variant, arrH() As Variant, arrS() As Variant
-        Dim arrD() As Variant ' ★D列=金額も入れる
-    
-        ReDim arrB(1 To n, 1 To 1)
-        ReDim arrF(1 To n, 1 To 1)
-        ReDim arrP(1 To n, 1 To 1)
-        ReDim arrG(1 To n, 1 To 1)
-        ReDim arrH(1 To n, 1 To 1)
-        ReDim arrS(1 To n, 1 To 1)
-        ReDim arrD(1 To n, 1 To 1)
-    
+        ' --- Build employee name->ID lookup from shuukei sheet ---
+        Dim wsMap As Worksheet
+        On Error Resume Next
+        Set wsMap = wb.Worksheets("集計")
+        On Error GoTo ErrHandler
+        Dim dictEmp As Object: Set dictEmp = CreateObject("Scripting.Dictionary")
+        dictEmp.CompareMode = 1
+        If Not wsMap Is Nothing Then
+            Dim mapLast As Long
+            mapLast = Application.Max(LastUsedRowInCol(wsMap, 1), LastUsedRowInCol(wsMap, 2))
+            If mapLast >= 2 Then
+                Dim mArr As Variant
+                mArr = wsMap.Range(wsMap.Cells(2, 1), wsMap.Cells(mapLast, 2)).value
+                Dim mi As Long
+                For mi = 1 To UBound(mArr, 1)
+                    Dim mNo As String, mNm As String, mKey As String
+                    If Not IsEmpty(mArr(mi, 1)) Then mNo = CStr(mArr(mi, 1)) Else mNo = ""
+                    If Not IsEmpty(mArr(mi, 2)) Then mNm = CStr(mArr(mi, 2)) Else mNm = ""
+                    mKey = KeyName(mNm)
+                    If mKey <> "" And mNo <> "" Then
+                        If Not dictEmp.Exists(mKey) Then dictEmp.Add mKey, mNo
+                    End If
+                Next mi
+            End If
+        End If
+
+        ' --- Build 34-column output array ---
+        Dim out() As Variant
+        ReDim out(1 To n, 1 To 34)
+
         Dim i As Long: i = 0
         Dim nm As String, dt As String, dep As String, arrv As String
-        Dim route As String, method As String, detail As String, amt As String
-    
+        Dim method As String, detail As String, amt As String, empKey As String
+
         For r = 1 To rowsTotal
             If (CStr(v(r, 1)) <> "") Or (CStr(v(r, 2)) <> "") Or (CStr(v(r, 3)) <> "") Or _
                (CStr(v(r, 4)) <> "") Or (CStr(v(r, 5)) <> "") Or (CStr(v(r, 6)) <> "") Or _
                (CStr(v(r, 7)) <> "") Then
-    
+
                 i = i + 1
-    
-                nm = CStr(v(r, 1)) ' A:名前
+
+                nm = CStr(v(r, 1))     ' A: name
                 If IsDate(v(r, 2)) Then
-                    dt = Format$(CDate(v(r, 2)), "yyyy/mm/dd") ' B:日付→文字列
+                    dt = Format$(CDate(v(r, 2)), "yyyy/mm/dd")
                 Else
                     dt = CStr(v(r, 2))
                 End If
-    
-                dep = CStr(v(r, 3))  ' C:出発
-                arrv = CStr(v(r, 4))  ' D:到着
-                If (dep <> "") Or (arrv <> "") Then
-                    route = dep & "→" & arrv
-                Else
-                    route = ""
+
+                dep = CStr(v(r, 3))    ' C: departure
+                arrv = CStr(v(r, 4))   ' D: arrival
+                method = CStr(v(r, 5)) ' E: method
+                detail = CStr(v(r, 6)) ' F: detail
+                amt = CStr(v(r, 7))    ' G: amount
+
+                ' A(1): employee number from name lookup
+                empKey = KeyName(nm)
+                If empKey <> "" And dictEmp.Exists(empKey) Then
+                    out(i, 1) = CStr(dictEmp(empKey))
                 End If
-    
-                method = CStr(v(r, 5))  ' E:手段
-                detail = CStr(v(r, 6))  ' F:内訳
-                amt = CStr(v(r, 7))     ' G:金額
-    
-                arrB(i, 1) = nm
-                arrF(i, 1) = dt
-                arrP(i, 1) = route
-                arrG(i, 1) = method
-                arrH(i, 1) = detail
-                arrS(i, 1) = amt
-                arrD(i, 1) = amt  ' ★常にD列にも金額を入れる（文字列）
+                ' B(2): name
+                out(i, 2) = nm
+                ' F(6): date
+                out(i, 6) = dt
+                ' G(7): method/transport
+                out(i, 7) = method
+                ' H(8): detail
+                out(i, 8) = detail
+                ' N(14): fare amount
+                out(i, 14) = amt
+                ' P(16): amount (same as N)
+                out(i, 16) = amt
+                ' AE(31): departure station
+                out(i, 31) = dep
+                ' AF(32): arrival station
+                out(i, 32) = arrv
+                ' AH(34): customer billing (all e-staffing is customer billing)
+                out(i, 34) = amt
             End If
         Next r
-    
-        ' 書式を文字列にして投入
+
+        ' --- Write output ---
         With wsDst
-            .Range(.Cells(dstStartRow, 2), .Cells(dstStartRow + n - 1, 2)).NumberFormat = "@"
-            .Range(.Cells(dstStartRow, 6), .Cells(dstStartRow + n - 1, 6)).NumberFormat = "@"
-            .Range(.Cells(dstStartRow, 33), .Cells(dstStartRow + n - 1, 33)).NumberFormat = "@"
-            .Range(.Cells(dstStartRow, 7), .Cells(dstStartRow + n - 1, 7)).NumberFormat = "@"
-            .Range(.Cells(dstStartRow, 8), .Cells(dstStartRow + n - 1, 8)).NumberFormat = "@"
-            .Range(.Cells(dstStartRow, 34), .Cells(dstStartRow + n - 1, 34)).NumberFormat = "@"
-            .Range(.Cells(dstStartRow, 4), .Cells(dstStartRow + n - 1, 4)).NumberFormat = "@"
-    
-            .Range(.Cells(dstStartRow, 2), .Cells(dstStartRow + n - 1, 2)).value = arrB
-            .Range(.Cells(dstStartRow, 6), .Cells(dstStartRow + n - 1, 6)).value = arrF
-            .Range(.Cells(dstStartRow, 33), .Cells(dstStartRow + n - 1, 33)).value = arrP
-            .Range(.Cells(dstStartRow, 7), .Cells(dstStartRow + n - 1, 7)).value = arrG
-            .Range(.Cells(dstStartRow, 8), .Cells(dstStartRow + n - 1, 8)).value = arrH
-            .Range(.Cells(dstStartRow, 34), .Cells(dstStartRow + n - 1, 34)).value = arrS
-            .Range(.Cells(dstStartRow, 4), .Cells(dstStartRow + n - 1, 4)).value = arrD  ' ★D
+            Dim dstRange As Range
+            Set dstRange = .Range(.Cells(dstStartRow, 1), .Cells(dstStartRow + n - 1, 34))
+            dstRange.NumberFormat = "@"
+            dstRange.value = out
         End With
     
 FinallyExit:
