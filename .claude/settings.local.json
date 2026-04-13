@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(///Nmht/NMHumaTach//**)",
+      "Bash(python3:*)",
+      "Read(//tmp/**)",
+      "Bash(iconv -f utf-8 -t utf-8)",
+      "Bash(pip install:*)"
+    ]
+  }
+}
