@@ -4,7 +4,7 @@ Option Explicit
 '------------------------------------------------------------------------------
 ' 給与明細処理マクロ v6
 ' - 差額調整は「給与明細(前月実績)」を元に計算
-' - 基本給変更リスト(A:社員番号, B:氏名, C:前月基礎時給, D:前月標準時間, E:前月みなし給)を参照
+' - 基本給変更リスト(A:社員番号, B:氏名, C:前月基礎時給, D:前月標準時間, E:前月みなし給, F:前月基本給)を参照
 ' - Step4で当月固定給（基本給/みなし給/各種手当）をデータベース値で上書き
 '------------------------------------------------------------------------------
 
@@ -200,9 +200,10 @@ Sub Step3_差額調整計算()
     Dim empKey As String, salaryTitle As String
     Dim m0 As Double, n0 As Double, s0 As Double, t0 As Double, w0 As Double
     Dim actualAmt As Double, provisionalAmt As Double
-    Dim monthlyVarAmt As Double, prevMinashiAmt As Double
+    Dim monthlyVarAmt As Double, prevMinashiAmt As Double, prevBasicAmt As Double
     Dim info As Variant
     Dim rawPrevAT As String, rawPrevAQ As String, rawPrevMinashi As String
+    Dim rawPrevBasic As String
     
     Dim processedCount As Long, hourlyCount As Long, monthlyCount As Long
     Dim dbNotFoundCount As Long, hourlyFallbackCount As Long, monthlyFallbackCount As Long
@@ -255,11 +256,13 @@ Sub Step3_差額調整計算()
         rawPrevAT = ""
         rawPrevAQ = ""
         rawPrevMinashi = ""
+        rawPrevBasic = ""
         If chgMap.Exists(empKey) Then
             info = chgMap(empKey)
             rawPrevAT = CStr(info(0))
             rawPrevAQ = CStr(info(1))
             rawPrevMinashi = CStr(info(2))
+            rawPrevBasic = CStr(info(3))
         End If
         
         If salaryTitle = "時給制" Then
@@ -287,8 +290,14 @@ Sub Step3_差額調整計算()
             monthlyVarAmt = ToDbl(wsMeisai.Cells(i, 15).Value) + _
                             ToDbl(wsMeisai.Cells(i, 16).Value) + _
                             ToDbl(wsMeisai.Cells(i, 17).Value)
-            provisionalAmt = m0 + prevMinashiAmt + s0 + t0 + w0
-            actualAmt = provisionalAmt + monthlyVarAmt
+            If rawPrevBasic <> "" Then
+                prevBasicAmt = ToDbl(rawPrevBasic)
+            Else
+                prevBasicAmt = m0
+            End If
+            
+            provisionalAmt = prevBasicAmt + prevMinashiAmt + s0 + t0 + w0
+            actualAmt = m0 + n0 + monthlyVarAmt + s0 + t0 + w0
         End If
         
         wsMeisai.Cells(i, 27).Value = actualAmt - provisionalAmt
@@ -302,7 +311,7 @@ ContinueLoop:
     MsgBox "差額調整計算が完了しました。" & vbCrLf & _
            "処理件数: " & processedCount & " 件" & vbCrLf & _
            "時給制: " & hourlyCount & " 件（変更リスト未設定フォールバック: " & hourlyFallbackCount & " 件）" & vbCrLf & _
-           "月給制: " & monthlyCount & " 件（前月みなし給未設定フォールバック: " & monthlyFallbackCount & " 件）" & vbCrLf & _
+           "月給制: " & monthlyCount & " 件（前月みなし給/基本給未設定フォールバック: " & monthlyFallbackCount & " 件）" & vbCrLf & _
            "DB未マッチ: " & dbNotFoundCount & " 件", vbInformation
 End Sub
 
@@ -383,9 +392,10 @@ Sub Step4_基本給みなし給上書き()
             
             wsMeisai.Cells(i, 13).Value = ToDbl(wsDB.Cells(dbRow, 42).Value)
             wsMeisai.Cells(i, 14).Value = ToDbl(wsDB.Cells(dbRow, 49).Value)
-            wsMeisai.Cells(i, 19).Value = ToDbl(wsDB.Cells(dbRow, 37).Value)
-            wsMeisai.Cells(i, 20).Value = ToDbl(wsDB.Cells(dbRow, 38).Value)
-            wsMeisai.Cells(i, 23).Value = ToDbl(wsDB.Cells(dbRow, 39).Value)
+            wsMeisai.Cells(i, 19).Value = ToDbl(wsDB.Cells(dbRow, 38).Value)
+            wsMeisai.Cells(i, 20).Value = ToDbl(wsDB.Cells(dbRow, 39).Value)
+            wsMeisai.Cells(i, 23).Value = ToDbl(wsDB.Cells(dbRow, 40).Value)
+            wsMeisai.Cells(i, 24).Value = ToDbl(wsDB.Cells(dbRow, 37).Value)
             
             matchCount = matchCount + 1
         Else
@@ -803,7 +813,7 @@ Private Function BuildChangeMap(ByVal ws As Worksheet, ByVal lastRow As Long) As
     Dim dic As Object
     Dim r As Long
     Dim key As String
-    Dim cVal As String, dVal As String, eVal As String
+    Dim cVal As String, dVal As String, eVal As String, fVal As String
     
     Set dic = CreateObject("Scripting.Dictionary")
     For r = 2 To lastRow
@@ -812,7 +822,8 @@ Private Function BuildChangeMap(ByVal ws As Worksheet, ByVal lastRow As Long) As
             cVal = Trim$(CStr(ws.Cells(r, 3).Value))
             dVal = Trim$(CStr(ws.Cells(r, 4).Value))
             eVal = Trim$(CStr(ws.Cells(r, 5).Value))
-            dic(key) = Array(cVal, dVal, eVal)
+            fVal = Trim$(CStr(ws.Cells(r, 6).Value))
+            dic(key) = Array(cVal, dVal, eVal, fVal)
         End If
     Next r
     Set BuildChangeMap = dic

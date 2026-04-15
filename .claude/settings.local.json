@@ -5,7 +5,11 @@
       "Bash(python3:*)",
       "Read(//tmp/**)",
       "Bash(iconv -f utf-8 -t utf-8)",
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "Read(//z/マクロ保管場所谷津用/差額調整マクロ/**)",
+      "Read(//z/マクロ保管場所谷津用/銀行振込用マクロ/**)",
+      "Bash(node -e ':*)",
+      "Bash(node -e \"const b=require\\('fs'\\).readFileSync\\('Z:/マクロ保管場所谷津用/差額調整マクロ/データフォーマット整理マクロ.bas'\\); console.log\\('UTF-8置換文字なし:', !b.includes\\(Buffer.from\\([0xef,0xbf,0xbd]\\)\\)\\)\")"
     ]
   }
 }
