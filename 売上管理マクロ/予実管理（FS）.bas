@@ -582,6 +582,8 @@ For i = 3 To MR1
     If IsError(v) Then v = Application.Match("顧客対応当番", ws3.Rows(1), 0)
     If IsError(v) Then v = Application.Match("顧客対応", ws3.Rows(1), 0)
     If Not IsError(v) Then dutyCol = CLng(v)
+    Dim isUALSheet As Boolean
+    isUALSheet = (InStr(1, ws0.Name, "UAL常駐", vbTextCompare) > 0)
 
     For j = 3 To MR0
         ' 進捗表示
@@ -590,6 +592,67 @@ For i = 3 To MR1
         Application.StatusBar = wb0.Name & " ワークブックの" & ws0.Name & " 処理中 " & pct & "終了"
 
         ' ブロック頭で社員番号を探す＆転出スキップ
+        If isUALSheet Then
+            Dim ualItemName As String
+            ualItemName = Trim$(CStr(ws0.Cells(j, 11).Value))
+
+            If ualItemName = "総受注金額" Then
+                wRow = 0
+                wRowBase = 0
+                If Trim$(CStr(ws0.Cells(j, 1).Value)) <> "" Then
+                    Set FCell = ws3.Columns(1).Find(What:=CStr(ws0.Cells(j, 1).Value), _
+                                                    LookIn:=xlValues, LookAt:=xlWhole)
+                    Set FCellBase = ws3Kihon.Columns(1).Find(What:=CStr(ws0.Cells(j, 1).Value), _
+                                                             LookIn:=xlValues, LookAt:=xlWhole)
+                    If Not FCell Is Nothing Then
+                        wRow = FCell.Row
+                        If Not FCellBase Is Nothing Then wRowBase = FCellBase.Row
+                        If wRowBase = 0 Then wRowBase = wRow
+                    End If
+                End If
+            End If
+
+            Select Case ualItemName
+                Case "賃金"
+                    ws0.Cells(j, T_mon).Value = ""
+                    If wRowBase > 0 Then
+                        ws0.Cells(j, T_mon).Value = ws3Kihon.Cells(wRowBase, BASIC_PAY_COL).Value
+                    ElseIf wRow > 0 Then
+                        ws0.Cells(j, T_mon).Value = ws3.Cells(wRow, BASIC_PAY_COL).Value
+                    End If
+                    If ws0.Cells(j, T_mon).Value = 0 Then ws0.Cells(j, T_mon).Value = "￥0"
+                Case "顧客対応当番", "顧客対応当番手当", "交通費"
+                    ws0.Cells(j, T_mon).Value = ""
+                    If wRow > 0 And dutyCol > 0 Then
+                        ws0.Cells(j, T_mon).Value = ws3.Cells(wRow, dutyCol).Value
+                    End If
+                    If ws0.Cells(j, T_mon).Value = 0 Then ws0.Cells(j, T_mon).Value = "￥0"
+                Case "通勤定期代"
+                    ws0.Cells(j, T_mon).Value = ""
+                    If wRow > 0 Then ws0.Cells(j, T_mon).Value = ws3.Cells(wRow, 93).Value
+                    If ws0.Cells(j, T_mon).Value = 0 Then ws0.Cells(j, T_mon).Value = "￥0"
+                Case "健康保険"
+                    ws0.Cells(j, T_mon).Value = ""
+                    If wRow > 0 Then
+                        ws0.Cells(j, T_mon).Value = ws3.Cells(wRow, 138).Value + ws3.Cells(wRow, 139).Value
+                    End If
+                    If ws0.Cells(j, T_mon).Value = 0 Then ws0.Cells(j, T_mon).Value = "￥0"
+                Case "厚生年金"
+                    ws0.Cells(j, T_mon).Value = ""
+                    If wRow > 0 Then ws0.Cells(j, T_mon).Value = ws3.Cells(wRow, 140).Value
+                    If ws0.Cells(j, T_mon).Value = 0 Then ws0.Cells(j, T_mon).Value = "￥0"
+                Case "労災保険"
+                    ws0.Cells(j, T_mon).Value = ""
+                    If wRow > 0 Then ws0.Cells(j, T_mon).Value = ws3.Cells(wRow, 180).Value
+                    If ws0.Cells(j, T_mon).Value = 0 Then ws0.Cells(j, T_mon).Value = "￥0"
+                Case "雇用保険"
+                    ws0.Cells(j, T_mon).Value = ""
+                    If wRow > 0 Then ws0.Cells(j, T_mon).Value = ws3.Cells(wRow, 137).Value
+                    If ws0.Cells(j, T_mon).Value = 0 Then ws0.Cells(j, T_mon).Value = "￥0"
+            End Select
+
+            GoTo label1
+        End If
         If (j - 3) Mod 8 = 0 Then
             wRow = 0
             wRowBase = 0
