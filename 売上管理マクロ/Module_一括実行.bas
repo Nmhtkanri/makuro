@@ -1,0 +1,120 @@
+Attribute VB_Name = "Module_一括実行"
+Option Explicit
+
+Public Sub 一括転記_SI()
+    Call Tenki_Shubetsu("SI")
+End Sub
+
+Public Sub 一括転記_ホンダ()
+    Call Tenki_Shubetsu("Honda")
+End Sub
+
+Public Sub 一括転記_UAL()
+    Call Tenki_Shubetsu("UAL")
+End Sub
+
+Public Sub 一括転記_その他()
+    Call Tenki_Shubetsu("Other")
+End Sub
+
+Public Sub 一括転記_全部()
+    Call Tenki_Shubetsu("SI")
+    Call Tenki_Shubetsu("Honda")
+    Call Tenki_Shubetsu("UAL")
+    Call Tenki_Shubetsu("Other")
+End Sub
+
+Private Sub Tenki_Shubetsu(fmtCode As String)
+    Application.ScreenUpdating = False
+    Application.DisplayAlerts = False
+    Application.Calculation = xlCalculationManual
+
+    Dim wb1 As Workbook:  Set wb1 = ThisWorkbook
+    Dim ws1 As Worksheet: Set ws1 = wb1.Worksheets("操作画面")
+
+    Dim jinjerPath As String: jinjerPath = Trim(CStr(ws1.Range("G4").Value))
+    Dim jinjerSheet As String: jinjerSheet = Trim(CStr(ws1.Range("H4").Value))
+    If jinjerPath = "" Then
+        MsgBox "G4に経費データパスが設定されていません"
+        GoTo Cleanup
+    End If
+    If jinjerSheet = "" Then
+        MsgBox "H4に経費データシート名が設定されていません"
+        GoTo Cleanup
+    End If
+
+    Dim wb3 As Workbook
+    Dim ws3 As Worksheet
+    Dim ws3Kihon As Worksheet
+    Dim jinjerOpen As Boolean: jinjerOpen = False
+    Dim wbChk As Workbook
+    For Each wbChk In Workbooks
+        If wbChk.FullName = jinjerPath Then
+            Set wb3 = wbChk
+            jinjerOpen = True
+            Exit For
+        End If
+    Next wbChk
+    If Not jinjerOpen Then
+        Set wb3 = Workbooks.Open(Filename:=jinjerPath, UpdateLinks:=False)
+    End If
+    If Not TryGetSheetByNameLoose(wb3, jinjerSheet, ws3) Then
+        MsgBox "H4の経費データシートが見つかりません: " & jinjerSheet, vbExclamation
+        GoTo Cleanup
+    End If
+    Set ws3Kihon = ws3
+
+    Dim kihonSheet As String
+    kihonSheet = Trim$(CStr(ws1.Range("I4").Value))
+    If kihonSheet <> "" Then
+        Set ws3Kihon = Nothing
+        If Not TryGetSheetByNameLoose(wb3, kihonSheet, ws3Kihon) Then
+            MsgBox "I4の基本給参照シートが見つかりません。H4シートを使用します。", vbExclamation
+            Set ws3Kihon = ws3
+        End If
+    End If
+
+    wb1.Activate
+
+    Dim lastOpeRow As Long
+    lastOpeRow = ws1.Cells(ws1.Rows.Count, 2).End(xlUp).Row
+
+    Dim i As Long
+    For i = 3 To lastOpeRow
+        Dim cellType As String
+        cellType = Trim(CStr(ws1.Cells(i, 1).Value))
+
+        Dim isMatch As Boolean: isMatch = False
+        Select Case fmtCode
+            Case "SI":    isMatch = (cellType = "SI")
+            Case "Honda": isMatch = (cellType = "ホンダ")
+            Case "UAL":   isMatch = (cellType = "UAL")
+            Case "Other": isMatch = (cellType = "その他")
+        End Select
+        If Not isMatch Then GoTo SkipRow
+
+        Dim bookPath As String
+        bookPath = Trim(CStr(ws1.Cells(i, 2).Value))
+        If bookPath = "" Then GoTo SkipRow
+
+        Dim sheetName As String
+        sheetName = Trim(CStr(ws1.Cells(i, 3).Value))
+
+        Application.StatusBar = "転記中: " & bookPath
+
+        Call 汎用転記_Sub(bookPath, ws3, ws3Kihon, fmtCode, sheetName)
+
+SkipRow:
+    Next i
+
+    ws1.Range("C1").Value = Now & "完了"
+
+Cleanup:
+    If Not jinjerOpen Then
+        If Not wb3 Is Nothing Then wb3.Close SaveChanges:=False
+    End If
+    Application.ScreenUpdating = True
+    Application.DisplayAlerts = True
+    Application.StatusBar = "完了"
+    Application.Calculation = xlCalculationAutomatic
+End Sub

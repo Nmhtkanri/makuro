@@ -1,0 +1,214 @@
+Attribute VB_Name = "Module_îƒópì]ãL"
+Option Explicit
+
+Private Const C_CHINGIN    As String = "í¿ã‡"
+Private Const C_KOKYAKU    As String = "å⁄ãqëŒâûìñî‘"
+Private Const C_KOKYAKU_TE As String = "å⁄ãqëŒâûìñî‘éËìñ"
+Private Const C_KOTSUHI    As String = "åí îÔ"
+Private Const C_TSUKIN     As String = "í ãŒíËä˙ë„"
+Private Const C_KENKO      As String = "åíçNï€åØ"
+Private Const C_KAIGO      As String = "âÓåÏï€åØ"
+Private Const C_KOSE       As String = "å˙ê∂îNã‡"
+Private Const C_ROSAI      As String = "òJç–ï€åØ"
+Private Const C_KOYO       As String = "åŸópï€åØ"
+
+Private Function NormalizeSheetNameKey(ByVal sheetName As String) As String
+    Dim key As String
+    key = CStr(sheetName)
+    key = Replace$(key, vbTab, "")
+    key = Replace$(key, Chr$(160), "")
+    key = Replace$(key, ChrW$(&H3000), "")
+    key = Replace$(key, " ", "")
+    key = Replace$(key, "Åi", "(")
+    key = Replace$(key, "Åj", ")")
+    NormalizeSheetNameKey = LCase$(Trim$(key))
+End Function
+
+Public Function TryGetSheetByNameLoose(ByVal wb As Workbook, ByVal targetName As String, ByRef wsOut As Worksheet) As Boolean
+    Dim targetKey As String
+    targetKey = NormalizeSheetNameKey(targetName)
+    If targetKey = "" Then Exit Function
+
+    Dim ws As Worksheet
+    For Each ws In wb.Worksheets
+        If NormalizeSheetNameKey(ws.Name) = targetKey Then
+            Set wsOut = ws
+            TryGetSheetByNameLoose = True
+            Exit Function
+        End If
+    Next ws
+End Function
+
+'------------------------------------------------
+' Public Sub àÍäáì]ãL(bookPath, ws3, formatType, targetSheetName)
+' formatType: "SI" / "Honda" / "UAL" / "Other"
+'------------------------------------------------
+Public Sub îƒópì]ãL_Sub(bookPath As String, ws3 As Worksheet, ws3Kihon As Worksheet, formatType As String, targetSheetName As String)
+    Dim wb1 As Workbook:  Set wb1 = ThisWorkbook
+    Dim ws1 As Worksheet: Set ws1 = wb1.Worksheets("ëÄçÏâÊñ ")
+
+    Dim colItem    As Long
+    Dim colMonStart As Long
+    Dim colEmpNo   As Long: colEmpNo = 1
+    Select Case formatType
+        Case "Honda"
+            colItem     = 10
+            colMonStart = 11
+        Case Else
+            colItem     = 11
+            colMonStart = 12
+    End Select
+
+    Dim thisMonth As String
+    thisMonth = CStr(ws1.Range("G1").Value) & "åé"
+
+    Dim wbTarget As Workbook
+    Dim targetIsOpen As Boolean: targetIsOpen = False
+    Dim wbChk As Workbook
+    For Each wbChk In Workbooks
+        If wbChk.FullName = bookPath Then
+            Set wbTarget = wbChk
+            targetIsOpen = True
+            Exit For
+        End If
+    Next wbChk
+    If Not targetIsOpen Then
+        Set wbTarget = Workbooks.Open(Filename:=bookPath, UpdateLinks:=False)
+    End If
+
+    Dim targetWs As Worksheet
+    If Trim$(targetSheetName) <> "" Then
+        If Not TryGetSheetByNameLoose(wbTarget, targetSheetName, targetWs) Then
+            MsgBox "ëÄçÏâÊñ ÇÃWorkSheetÇ™å©Ç¬Ç©ÇËÇ‹ÇπÇÒ: " & targetSheetName, vbExclamation
+            GoTo Finalize
+        End If
+    End If
+
+    Dim ws0 As Worksheet
+    For Each ws0 In wbTarget.Worksheets
+        If Not targetWs Is Nothing Then
+            If ws0.Name <> targetWs.Name Then GoTo NextSheet
+        End If
+
+        Dim T_mon As Long: T_mon = 0
+        On Error Resume Next
+        T_mon = WorksheetFunction.Match(thisMonth, ws0.Rows(1), 0)
+        On Error GoTo 0
+        If T_mon = 0 Then GoTo NextSheet
+
+        Dim lastRow As Long
+        lastRow = ws0.Cells(ws0.Rows.Count, colItem).End(xlUp).Row
+        If lastRow < 2 Then GoTo NextSheet
+
+        Dim rowIdx As Long: rowIdx = 2
+        Do While rowIdx <= lastRow
+            Dim empVal As String
+            empVal = Trim(CStr(ws0.Cells(rowIdx, colEmpNo).Value))
+            If empVal = "" Then
+                rowIdx = rowIdx + 1
+            Else
+                Dim blockEnd As Long: blockEnd = lastRow
+                Dim kk As Long
+                For kk = rowIdx + 1 To lastRow
+                    If Trim(CStr(ws0.Cells(kk, colEmpNo).Value)) <> "" Then
+                        blockEnd = kk - 1
+                        Exit For
+                    End If
+                Next kk
+
+                Dim wRow As Long: wRow = 0
+                Dim wRowBase As Long: wRowBase = 0
+                Dim fc As Range
+                Dim fcBase As Range
+                Set fc = ws3.Range("A:A").Find(What:=empVal, LookAt:=xlWhole)
+                If Not fc Is Nothing Then wRow = fc.Row
+
+                If ws3Kihon Is Nothing Then Set ws3Kihon = ws3
+                Set fcBase = ws3Kihon.Range("A:A").Find(What:=empVal, LookAt:=xlWhole)
+                If Not fcBase Is Nothing Then wRowBase = fcBase.Row
+                If wRowBase = 0 Then wRowBase = wRow
+
+                Dim hasKaigo As Boolean: hasKaigo = False
+                Dim sr As Long
+                For sr = rowIdx To blockEnd
+                    Dim sItem As String
+                    sItem = CStr(ws0.Cells(sr, colItem).Value)
+                    If InStr(sItem, C_KAIGO) > 0 And InStr(sItem, C_KENKO) = 0 Then
+                        hasKaigo = True
+                        Exit For
+                    End If
+                Next sr
+
+                Dim ir As Long
+                For ir = rowIdx To blockEnd
+                    Dim iName As String
+                    iName = CStr(ws0.Cells(ir, colItem).Value)
+                    If iName = "" Then GoTo NextItemRow
+
+                    If iName = C_CHINGIN Then
+                        ws0.Cells(ir, T_mon).Value = 0
+                        If wRowBase > 0 Then
+                            ws0.Cells(ir, T_mon).Value = GetBasePay(ws3Kihon, wRowBase)
+                        ElseIf wRow > 0 Then
+                            ws0.Cells(ir, T_mon).Value = GetBasePay(ws3, wRow)
+                        End If
+                    ElseIf iName = C_KOKYAKU Or iName = C_KOKYAKU_TE Or iName = "On-call" Then
+                        ws0.Cells(ir, T_mon).Value = 0
+                        If wRow > 0 Then ws0.Cells(ir, T_mon).Value = ws3.Cells(wRow, 71).Value
+                    ElseIf iName = C_KOTSUHI Then
+                        ws0.Cells(ir, T_mon).Value = 0
+                        If wRow > 0 Then
+                            ws0.Cells(ir, T_mon).Value = Round(ws3.Cells(wRow, 93).Value, 0)
+                            If ws0.Cells(ir, T_mon).Value = 0 Then ws0.Cells(ir, T_mon).Value = Round(ws3.Cells(wRow, 95).Value, 0)
+                        End If
+                    ElseIf iName = C_TSUKIN Then
+                        ws0.Cells(ir, T_mon).Value = 0
+                        If wRow > 0 Then ws0.Cells(ir, T_mon).Value = Round(ws3.Cells(wRow, 93).Value, 0)
+                    ElseIf InStr(iName, C_KENKO) > 0 And InStr(iName, C_KAIGO) > 0 Then
+                        ws0.Cells(ir, T_mon).Value = 0
+                        If wRow > 0 Then ws0.Cells(ir, T_mon).Value = ws3.Cells(wRow, 138).Value + ws3.Cells(wRow, 139).Value
+                    ElseIf InStr(iName, C_KENKO) > 0 Then
+                        ws0.Cells(ir, T_mon).Value = 0
+                        If wRow > 0 Then
+                            If hasKaigo Then
+                                ws0.Cells(ir, T_mon).Value = ws3.Cells(wRow, 138).Value
+                            Else
+                                ws0.Cells(ir, T_mon).Value = ws3.Cells(wRow, 138).Value + ws3.Cells(wRow, 139).Value
+                            End If
+                        End If
+                    ElseIf InStr(iName, C_KAIGO) > 0 Then
+                        ws0.Cells(ir, T_mon).Value = 0
+                        If wRow > 0 Then ws0.Cells(ir, T_mon).Value = ws3.Cells(wRow, 139).Value
+                    ElseIf iName = C_KOSE Then
+                        ws0.Cells(ir, T_mon).Value = 0
+                        If wRow > 0 Then ws0.Cells(ir, T_mon).Value = ws3.Cells(wRow, 140).Value
+                    ElseIf iName = C_ROSAI Then
+                        ws0.Cells(ir, T_mon).Value = 0
+                        If wRow > 0 Then ws0.Cells(ir, T_mon).Value = ws3.Cells(wRow, 180).Value
+                    ElseIf iName = C_KOYO Then
+                        ws0.Cells(ir, T_mon).Value = 0
+                        If wRow > 0 Then ws0.Cells(ir, T_mon).Value = ws3.Cells(wRow, 137).Value
+                    End If
+NextItemRow:
+                Next ir
+
+                Dim lastColRow As Long
+                lastColRow = ws0.Cells(ws0.Rows.Count, colItem).End(xlUp).Row
+                Dim kkk As Long
+                For kkk = 1 To lastColRow
+                    ws0.Cells(kkk, T_mon).Font.ColorIndex = 1
+                Next kkk
+
+                rowIdx = blockEnd + 1
+            End If
+        Loop
+NextSheet:
+    Next ws0
+
+Finalize:
+    wbTarget.Save
+    If Not targetIsOpen Then wbTarget.Close SaveChanges:=False
+
+    wb1.Activate
+    ws1.Activate
+End Sub

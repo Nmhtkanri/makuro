@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Edit(~/.claude/skills/read-sjis/**)",
+      "PowerShell(node \"C:\\\\Users\\\\�J�Ð���\\\\AppData\\\\Local\\\\Temp\\\\fix_kotsuhi.js\")",
+      "PowerShell(node \"C:\\\\Users\\\\�J�Ð���\\\\AppData\\\\Local\\\\Temp\\\\fix_kotsuhi2.js\")",
+      "PowerShell(node \"C:\\\\Users\\\\�J�Ð���\\\\AppData\\\\Local\\\\Temp\\\\check_lines.js\")",
+      "PowerShell(node \"C:\\\\Users\\\\�J�Ð���\\\\AppData\\\\Local\\\\Temp\\\\add_cq_fallback.js\")",
+      "Bash(node \"C:\\\\Users\\\\谷津晴香\\\\AppData\\\\Local\\\\Temp\\\\create_modules.js\")",
+      "PowerShell(powershell -ExecutionPolicy Bypass -File \"C:\\\\Users\\\\谷津晴香\\\\AppData\\\\Local\\\\Temp\\\\read_ual.ps1\")",
+      "Bash(node -e ' *)",
+      "Bash(node \"C:\\\\Users\\\\谷津晴香\\\\AppData\\\\Local\\\\Temp\\\\read_xlsx2.js\")",
+      "Bash(node \"C:\\\\Users\\\\谷津晴香\\\\AppData\\\\Local\\\\Temp\\\\read_xlsx3.js\")",
+      "Bash(node \"C:\\\\Users\\\\谷津晴香\\\\AppData\\\\Local\\\\Temp\\\\read_xlsx4.js\")"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\谷津晴香\\.claude\\skills",
+      "C:\\Users\\谷津晴香\\AppData\\Local\\Temp"
+    ]
+  }
+}

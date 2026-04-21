@@ -1,32 +1,4 @@
 Attribute VB_Name = "Module1"
-
-Private Function NormalizeSheetNameKey(ByVal sheetName As String) As String
-    Dim key As String
-    key = CStr(sheetName)
-    key = Replace$(key, vbTab, "")
-    key = Replace$(key, Chr$(160), "")
-    key = Replace$(key, ChrW$(&H3000), "")
-    key = Replace$(key, " ", "")
-    key = Replace$(key, "（", "(")
-    key = Replace$(key, "）", ")")
-    NormalizeSheetNameKey = LCase$(Trim$(key))
-End Function
-
-Private Function TryGetSheetByNameLooseLocal(ByVal wb As Workbook, ByVal targetName As String, ByRef wsOut As Worksheet) As Boolean
-    Dim targetKey As String
-    targetKey = NormalizeSheetNameKey(targetName)
-    If targetKey = "" Then Exit Function
-
-    Dim ws As Worksheet
-    For Each ws In wb.Worksheets
-        If NormalizeSheetNameKey(ws.Name) = targetKey Then
-            Set wsOut = ws
-            TryGetSheetByNameLooseLocal = True
-            Exit Function
-        End If
-    Next ws
-End Function
-
 Sub ワークシート一覧()
 
 Application.ScreenUpdating = False
@@ -407,12 +379,7 @@ For i = 3 To MR1
 Application.StatusBar = ws1.Range("B" & Format(i)).Value & "/" & ws1.Range("C" & Format(i)).Value
 Workbooks.Open Filename:=ws1.Range("B" & Format(i)).Value, UpdateLinks:=False
 Set wb0 = ActiveWorkbook
-Set ws0 = Nothing
-If Not TryGetSheetByNameLooseLocal(wb0, CStr(ws1.Range("C" & Format(i)).Value), ws0) Then
-MsgBox "操作画面C" & i & "のシートが見つかりません: " & ws1.Range("C" & Format(i)).Value, vbExclamation
-wb0.Close SaveChanges:=False
-GoTo label2
-End If
+Set ws0 = wb0.Worksheets(ws1.Range("C" & Format(i)).Value)
 MR0 = ws0.Cells(Rows.Count, 1).End(xlUp).Row
 ws0.Activate
 
@@ -425,7 +392,6 @@ End If
 End If
 Next
 wb0.Close
-label2:
 Next
 Application.ScreenUpdating = True
 Application.DisplayAlerts = True
@@ -499,11 +465,9 @@ Application.StatusBar = "売上データ読み込み中"
 Workbooks.Open Filename:=ws1.Range("G" & Format(3)).Value, UpdateLinks:=False
 Set wb2 = ActiveWorkbook
 salesSheetName = Trim$(CStr(ws1.Range("H" & Format(3)).Value))
-Set ws2 = Nothing
-If Not TryGetSheetByNameLooseLocal(wb2, salesSheetName, ws2) Then
-    MsgBox "操作画面H3の売上データシートが見つかりません: " & salesSheetName, vbExclamation
-    GoTo SafeExit
-End If
+On Error Resume Next
+Set ws2 = wb2.Worksheets(salesSheetName)
+On Error GoTo 0
 If ws2 Is Nothing Then
     MsgBox "操作画面H3の売上データシートが見つかりません: " & salesSheetName, vbExclamation
     GoTo SafeExit
@@ -512,11 +476,9 @@ Application.StatusBar = "経費データ読み込み中"
 Workbooks.Open Filename:=ws1.Range("G" & Format(4)).Value, UpdateLinks:=False
 Set wb3 = ActiveWorkbook
 expenseSheetName = Trim$(CStr(ws1.Range("H" & Format(4)).Value))
-Set ws3 = Nothing
-If Not TryGetSheetByNameLooseLocal(wb3, expenseSheetName, ws3) Then
-    MsgBox "操作画面H4の経費データシートが見つかりません: " & expenseSheetName, vbExclamation
-    GoTo SafeExit
-End If
+On Error Resume Next
+Set ws3 = wb3.Worksheets(expenseSheetName)
+On Error GoTo 0
 If ws3 Is Nothing Then
     MsgBox "操作画面H4の経費データシートが見つかりません: " & expenseSheetName, vbExclamation
     GoTo SafeExit
@@ -526,11 +488,9 @@ Set ws3Kihon = ws3
 Dim kihonSheetName As String
 kihonSheetName = Trim$(CStr(ws1.Range("I4").Value))
 If kihonSheetName <> "" Then
-    Set ws3Kihon = Nothing
-    If Not TryGetSheetByNameLooseLocal(wb3, kihonSheetName, ws3Kihon) Then
-        MsgBox "I4の基本給参照シートが見つかりません。H4シートを使用します。", vbExclamation
-        Set ws3Kihon = ws3
-    End If
+    On Error Resume Next
+    Set ws3Kihon = wb3.Worksheets(kihonSheetName)
+    On Error GoTo 0
     If ws3Kihon Is Nothing Then
         MsgBox "I4の基本給参照シートが見つかりません。H4シートを使用します。", vbExclamation
         Set ws3Kihon = ws3
@@ -561,12 +521,9 @@ For i = 3 To MR1
     Workbooks.Open Filename:=ws1.Range("B" & Format(i)).Value, UpdateLinks:=False
     Set wb0 = ActiveWorkbook
     targetSheetName = Trim$(CStr(ws1.Range("C" & Format(i)).Value))
-    Set ws0 = Nothing
-    If Not TryGetSheetByNameLooseLocal(wb0, targetSheetName, ws0) Then
-        MsgBox "操作画面C" & i & "のシートが見つかりません: " & targetSheetName, vbExclamation
-        wb0.Close SaveChanges:=False
-        GoTo NextWorkbook
-    End If
+    On Error Resume Next
+    Set ws0 = wb0.Worksheets(targetSheetName)
+    On Error GoTo 0
     If ws0 Is Nothing Then
         MsgBox "操作画面C" & i & "のシートが見つかりません: " & targetSheetName, vbExclamation
         wb0.Close SaveChanges:=False
@@ -659,24 +616,20 @@ For i = 3 To MR1
                 Case "賃金"
                     ws0.Cells(j, T_mon).Value = ""
                     If wRowBase > 0 Then
-                        ws0.Cells(j, T_mon).Value = GetBasePay(ws3Kihon, wRowBase)
+                        ws0.Cells(j, T_mon).Value = ws3Kihon.Cells(wRowBase, BASIC_PAY_COL).Value
                     ElseIf wRow > 0 Then
-                        ws0.Cells(j, T_mon).Value = GetBasePay(ws3, wRow)
+                        ws0.Cells(j, T_mon).Value = ws3.Cells(wRow, BASIC_PAY_COL).Value
                     End If
                     If ws0.Cells(j, T_mon).Value = 0 Then ws0.Cells(j, T_mon).Value = "￥0"
-                Case "顧客対応当番", "顧客対応当番手当"
-                    ws0.Cells(j, T_mon).Value = 0
-                    If wRow > 0 Then ws0.Cells(j, T_mon).Value = ws3.Cells(wRow, 71).Value
-                Case "交通費"
+                Case "顧客対応当番", "顧客対応当番手当", "交通費"
                     ws0.Cells(j, T_mon).Value = ""
-                    If wRow > 0 Then
-                        ws0.Cells(j, T_mon).Value = Round(ws3.Cells(wRow, 93).Value, 0)
-                        If ws0.Cells(j, T_mon).Value = 0 Then ws0.Cells(j, T_mon).Value = Round(ws3.Cells(wRow, 95).Value, 0)
+                    If wRow > 0 And dutyCol > 0 Then
+                        ws0.Cells(j, T_mon).Value = ws3.Cells(wRow, dutyCol).Value
                     End If
                     If ws0.Cells(j, T_mon).Value = 0 Then ws0.Cells(j, T_mon).Value = "￥0"
                 Case "通勤定期代"
                     ws0.Cells(j, T_mon).Value = ""
-                    If wRow > 0 Then ws0.Cells(j, T_mon).Value = Round(ws3.Cells(wRow, 93).Value, 0)
+                    If wRow > 0 Then ws0.Cells(j, T_mon).Value = ws3.Cells(wRow, 93).Value
                     If ws0.Cells(j, T_mon).Value = 0 Then ws0.Cells(j, T_mon).Value = "￥0"
                 Case "健康保険"
                     ws0.Cells(j, T_mon).Value = ""
@@ -758,24 +711,26 @@ For i = 3 To MR1
                     If baseRowFS + 1 <= wsDell.Rows.Count Then
                         wsDell.Cells(baseRowFS + 1, T_mon2).Value = ""
                         If wRowBase > 0 Then
-                            wsDell.Cells(baseRowFS + 1, T_mon2).Value = GetBasePay(ws3Kihon, wRowBase) '基本給（基本給参照シート優先）
+                            wsDell.Cells(baseRowFS + 1, T_mon2).Value = ws3Kihon.Cells(wRowBase, BASIC_PAY_COL).Value '基本給（基本給参照シート優先）
                         Else
-                            wsDell.Cells(baseRowFS + 1, T_mon2).Value = GetBasePay(ws3, wRow) '基本給
+                            wsDell.Cells(baseRowFS + 1, T_mon2).Value = ws3.Cells(wRow, BASIC_PAY_COL).Value '基本給
                         End If
                         If wsDell.Cells(baseRowFS + 1, T_mon2).Value = 0 Then wsDell.Cells(baseRowFS + 1, T_mon2).Value = "￥0"
                     End If
                     
                     ' 当番手当（社員番号行+2）
                     If baseRowFS + 2 <= wsDell.Rows.Count Then
-                        wsDell.Cells(baseRowFS + 2, T_mon2).Value = 0
-                        If wRow > 0 Then wsDell.Cells(baseRowFS + 2, T_mon2).Value = ws3.Cells(wRow, 71).Value
+                        wsDell.Cells(baseRowFS + 2, T_mon2).Value = ""
+                        If dutyCol > 0 Then
+                            wsDell.Cells(baseRowFS + 2, T_mon2).Value = ws3.Cells(wRow, dutyCol).Value
+                        End If
+                        If wsDell.Cells(baseRowFS + 2, T_mon2).Value = 0 Then wsDell.Cells(baseRowFS + 2, T_mon2).Value = "￥0"
                     End If
                     
                     ' 交通費（社員番号行+3）- 非課税通勤費
                     If baseRowFS + 3 <= wsDell.Rows.Count Then
                         wsDell.Cells(baseRowFS + 3, T_mon2).Value = ""
-                        wsDell.Cells(baseRowFS + 3, T_mon2).Value = Round(ws3.Cells(wRow, 93).Value, 0) '非課税通勤費
-                        If wsDell.Cells(baseRowFS + 3, T_mon2).Value = 0 Then wsDell.Cells(baseRowFS + 3, T_mon2).Value = Round(ws3.Cells(wRow, 95).Value, 0)
+                        wsDell.Cells(baseRowFS + 3, T_mon2).Value = ws3.Cells(wRow, 93).Value '非課税通勤費
                         If wsDell.Cells(baseRowFS + 3, T_mon2).Value = 0 Then wsDell.Cells(baseRowFS + 3, T_mon2).Value = "￥0"
                     End If
                     
@@ -819,25 +774,27 @@ For i = 3 To MR1
         If (j - 3) Mod 8 = 1 Then
             ws0.Cells(j, T_mon).Value = ""
             If wRowBase > 0 Then
-                ws0.Cells(j, T_mon).Value = GetBasePay(ws3Kihon, wRowBase) '基本給（基本給参照シート優先）
+                ws0.Cells(j, T_mon).Value = ws3Kihon.Cells(wRowBase, BASIC_PAY_COL).Value '基本給（基本給参照シート優先）
             ElseIf wRow > 0 Then
-                ws0.Cells(j, T_mon).Value = GetBasePay(ws3, wRow) '基本給
+                ws0.Cells(j, T_mon).Value = ws3.Cells(wRow, BASIC_PAY_COL).Value '基本給
             End If
             If ws0.Cells(j, T_mon).Value = 0 Then ws0.Cells(j, T_mon).Value = "￥0"
         End If
 
         ' 顧客対応当番手当（余り2）
         If (j - 3) Mod 8 = 2 Then
-            ws0.Cells(j, T_mon).Value = 0
-            If wRow > 0 Then ws0.Cells(j, T_mon).Value = ws3.Cells(wRow, 71).Value
+            ws0.Cells(j, T_mon).Value = ""
+            If wRow > 0 And dutyCol > 0 Then
+                ws0.Cells(j, T_mon).Value = ws3.Cells(wRow, dutyCol).Value
+            End If
+            If ws0.Cells(j, T_mon).Value = 0 Then ws0.Cells(j, T_mon).Value = "￥0"
         End If
 
         ' 交通費（余り3）- 非課税通勤費
         If (j - 3) Mod 8 = 3 Then
             ws0.Cells(j, T_mon).Value = ""
             If wRow > 0 Then
-                ws0.Cells(j, T_mon).Value = Round(ws3.Cells(wRow, 93).Value, 0) '非課税通勤費
-                If ws0.Cells(j, T_mon).Value = 0 Then ws0.Cells(j, T_mon).Value = Round(ws3.Cells(wRow, 95).Value, 0)
+                ws0.Cells(j, T_mon).Value = ws3.Cells(wRow, 93).Value '非課税通勤費
             End If
             If ws0.Cells(j, T_mon).Value = 0 Then ws0.Cells(j, T_mon).Value = "￥0"
         End If
@@ -1067,12 +1024,3 @@ Application.StatusBar = "終了"
 
 End Sub
 
-Function GetBasePay(ws As Worksheet, rowNum As Long) As Double
-    GetBasePay = ws.Cells(rowNum, 13).Value + ws.Cells(rowNum, 14).Value + _
-                 ws.Cells(rowNum, 15).Value + ws.Cells(rowNum, 16).Value + _
-                 ws.Cells(rowNum, 17).Value + ws.Cells(rowNum, 18).Value + _
-                 ws.Cells(rowNum, 19).Value + ws.Cells(rowNum, 20).Value + _
-                 ws.Cells(rowNum, 21).Value + ws.Cells(rowNum, 23).Value + _
-                 ws.Cells(rowNum, 24).Value + ws.Cells(rowNum, 25).Value + _
-                 ws.Cells(rowNum, 26).Value
-End Function

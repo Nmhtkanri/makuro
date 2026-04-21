@@ -659,24 +659,20 @@ For i = 3 To MR1
                 Case "賃金"
                     ws0.Cells(j, T_mon).Value = ""
                     If wRowBase > 0 Then
-                        ws0.Cells(j, T_mon).Value = GetBasePay(ws3Kihon, wRowBase)
+                        ws0.Cells(j, T_mon).Value = ws3Kihon.Cells(wRowBase, BASIC_PAY_COL).Value
                     ElseIf wRow > 0 Then
-                        ws0.Cells(j, T_mon).Value = GetBasePay(ws3, wRow)
+                        ws0.Cells(j, T_mon).Value = ws3.Cells(wRow, BASIC_PAY_COL).Value
                     End If
                     If ws0.Cells(j, T_mon).Value = 0 Then ws0.Cells(j, T_mon).Value = "￥0"
-                Case "顧客対応当番", "顧客対応当番手当"
-                    ws0.Cells(j, T_mon).Value = 0
-                    If wRow > 0 Then ws0.Cells(j, T_mon).Value = ws3.Cells(wRow, 71).Value
-                Case "交通費"
+                Case "顧客対応当番", "顧客対応当番手当", "交通費"
                     ws0.Cells(j, T_mon).Value = ""
-                    If wRow > 0 Then
-                        ws0.Cells(j, T_mon).Value = Round(ws3.Cells(wRow, 93).Value, 0)
-                        If ws0.Cells(j, T_mon).Value = 0 Then ws0.Cells(j, T_mon).Value = Round(ws3.Cells(wRow, 95).Value, 0)
+                    If wRow > 0 And dutyCol > 0 Then
+                        ws0.Cells(j, T_mon).Value = ws3.Cells(wRow, dutyCol).Value
                     End If
                     If ws0.Cells(j, T_mon).Value = 0 Then ws0.Cells(j, T_mon).Value = "￥0"
                 Case "通勤定期代"
                     ws0.Cells(j, T_mon).Value = ""
-                    If wRow > 0 Then ws0.Cells(j, T_mon).Value = Round(ws3.Cells(wRow, 93).Value, 0)
+                    If wRow > 0 Then ws0.Cells(j, T_mon).Value = ws3.Cells(wRow, 93).Value
                     If ws0.Cells(j, T_mon).Value = 0 Then ws0.Cells(j, T_mon).Value = "￥0"
                 Case "健康保険"
                     ws0.Cells(j, T_mon).Value = ""
@@ -758,24 +754,26 @@ For i = 3 To MR1
                     If baseRowFS + 1 <= wsDell.Rows.Count Then
                         wsDell.Cells(baseRowFS + 1, T_mon2).Value = ""
                         If wRowBase > 0 Then
-                            wsDell.Cells(baseRowFS + 1, T_mon2).Value = GetBasePay(ws3Kihon, wRowBase) '基本給（基本給参照シート優先）
+                            wsDell.Cells(baseRowFS + 1, T_mon2).Value = ws3Kihon.Cells(wRowBase, BASIC_PAY_COL).Value '基本給（基本給参照シート優先）
                         Else
-                            wsDell.Cells(baseRowFS + 1, T_mon2).Value = GetBasePay(ws3, wRow) '基本給
+                            wsDell.Cells(baseRowFS + 1, T_mon2).Value = ws3.Cells(wRow, BASIC_PAY_COL).Value '基本給
                         End If
                         If wsDell.Cells(baseRowFS + 1, T_mon2).Value = 0 Then wsDell.Cells(baseRowFS + 1, T_mon2).Value = "￥0"
                     End If
                     
                     ' 当番手当（社員番号行+2）
                     If baseRowFS + 2 <= wsDell.Rows.Count Then
-                        wsDell.Cells(baseRowFS + 2, T_mon2).Value = 0
-                        If wRow > 0 Then wsDell.Cells(baseRowFS + 2, T_mon2).Value = ws3.Cells(wRow, 71).Value
+                        wsDell.Cells(baseRowFS + 2, T_mon2).Value = ""
+                        If dutyCol > 0 Then
+                            wsDell.Cells(baseRowFS + 2, T_mon2).Value = ws3.Cells(wRow, dutyCol).Value
+                        End If
+                        If wsDell.Cells(baseRowFS + 2, T_mon2).Value = 0 Then wsDell.Cells(baseRowFS + 2, T_mon2).Value = "￥0"
                     End If
                     
                     ' 交通費（社員番号行+3）- 非課税通勤費
                     If baseRowFS + 3 <= wsDell.Rows.Count Then
                         wsDell.Cells(baseRowFS + 3, T_mon2).Value = ""
-                        wsDell.Cells(baseRowFS + 3, T_mon2).Value = Round(ws3.Cells(wRow, 93).Value, 0) '非課税通勤費
-                        If wsDell.Cells(baseRowFS + 3, T_mon2).Value = 0 Then wsDell.Cells(baseRowFS + 3, T_mon2).Value = Round(ws3.Cells(wRow, 95).Value, 0)
+                        wsDell.Cells(baseRowFS + 3, T_mon2).Value = ws3.Cells(wRow, 93).Value '非課税通勤費
                         If wsDell.Cells(baseRowFS + 3, T_mon2).Value = 0 Then wsDell.Cells(baseRowFS + 3, T_mon2).Value = "￥0"
                     End If
                     
@@ -819,25 +817,27 @@ For i = 3 To MR1
         If (j - 3) Mod 8 = 1 Then
             ws0.Cells(j, T_mon).Value = ""
             If wRowBase > 0 Then
-                ws0.Cells(j, T_mon).Value = GetBasePay(ws3Kihon, wRowBase) '基本給（基本給参照シート優先）
+                ws0.Cells(j, T_mon).Value = ws3Kihon.Cells(wRowBase, BASIC_PAY_COL).Value '基本給（基本給参照シート優先）
             ElseIf wRow > 0 Then
-                ws0.Cells(j, T_mon).Value = GetBasePay(ws3, wRow) '基本給
+                ws0.Cells(j, T_mon).Value = ws3.Cells(wRow, BASIC_PAY_COL).Value '基本給
             End If
             If ws0.Cells(j, T_mon).Value = 0 Then ws0.Cells(j, T_mon).Value = "￥0"
         End If
 
         ' 顧客対応当番手当（余り2）
         If (j - 3) Mod 8 = 2 Then
-            ws0.Cells(j, T_mon).Value = 0
-            If wRow > 0 Then ws0.Cells(j, T_mon).Value = ws3.Cells(wRow, 71).Value
+            ws0.Cells(j, T_mon).Value = ""
+            If wRow > 0 And dutyCol > 0 Then
+                ws0.Cells(j, T_mon).Value = ws3.Cells(wRow, dutyCol).Value
+            End If
+            If ws0.Cells(j, T_mon).Value = 0 Then ws0.Cells(j, T_mon).Value = "￥0"
         End If
 
         ' 交通費（余り3）- 非課税通勤費
         If (j - 3) Mod 8 = 3 Then
             ws0.Cells(j, T_mon).Value = ""
             If wRow > 0 Then
-                ws0.Cells(j, T_mon).Value = Round(ws3.Cells(wRow, 93).Value, 0) '非課税通勤費
-                If ws0.Cells(j, T_mon).Value = 0 Then ws0.Cells(j, T_mon).Value = Round(ws3.Cells(wRow, 95).Value, 0)
+                ws0.Cells(j, T_mon).Value = ws3.Cells(wRow, 93).Value '非課税通勤費
             End If
             If ws0.Cells(j, T_mon).Value = 0 Then ws0.Cells(j, T_mon).Value = "￥0"
         End If
@@ -1067,12 +1067,3 @@ Application.StatusBar = "終了"
 
 End Sub
 
-Function GetBasePay(ws As Worksheet, rowNum As Long) As Double
-    GetBasePay = ws.Cells(rowNum, 13).Value + ws.Cells(rowNum, 14).Value + _
-                 ws.Cells(rowNum, 15).Value + ws.Cells(rowNum, 16).Value + _
-                 ws.Cells(rowNum, 17).Value + ws.Cells(rowNum, 18).Value + _
-                 ws.Cells(rowNum, 19).Value + ws.Cells(rowNum, 20).Value + _
-                 ws.Cells(rowNum, 21).Value + ws.Cells(rowNum, 23).Value + _
-                 ws.Cells(rowNum, 24).Value + ws.Cells(rowNum, 25).Value + _
-                 ws.Cells(rowNum, 26).Value
-End Function

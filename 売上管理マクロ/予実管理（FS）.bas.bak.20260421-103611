@@ -1,32 +1,4 @@
 Attribute VB_Name = "Module1"
-
-Private Function NormalizeSheetNameKey(ByVal sheetName As String) As String
-    Dim key As String
-    key = CStr(sheetName)
-    key = Replace$(key, vbTab, "")
-    key = Replace$(key, Chr$(160), "")
-    key = Replace$(key, ChrW$(&H3000), "")
-    key = Replace$(key, " ", "")
-    key = Replace$(key, "（", "(")
-    key = Replace$(key, "）", ")")
-    NormalizeSheetNameKey = LCase$(Trim$(key))
-End Function
-
-Private Function TryGetSheetByNameLooseLocal(ByVal wb As Workbook, ByVal targetName As String, ByRef wsOut As Worksheet) As Boolean
-    Dim targetKey As String
-    targetKey = NormalizeSheetNameKey(targetName)
-    If targetKey = "" Then Exit Function
-
-    Dim ws As Worksheet
-    For Each ws In wb.Worksheets
-        If NormalizeSheetNameKey(ws.Name) = targetKey Then
-            Set wsOut = ws
-            TryGetSheetByNameLooseLocal = True
-            Exit Function
-        End If
-    Next ws
-End Function
-
 Sub ワークシート一覧()
 
 Application.ScreenUpdating = False
@@ -407,12 +379,7 @@ For i = 3 To MR1
 Application.StatusBar = ws1.Range("B" & Format(i)).Value & "/" & ws1.Range("C" & Format(i)).Value
 Workbooks.Open Filename:=ws1.Range("B" & Format(i)).Value, UpdateLinks:=False
 Set wb0 = ActiveWorkbook
-Set ws0 = Nothing
-If Not TryGetSheetByNameLooseLocal(wb0, CStr(ws1.Range("C" & Format(i)).Value), ws0) Then
-MsgBox "操作画面C" & i & "のシートが見つかりません: " & ws1.Range("C" & Format(i)).Value, vbExclamation
-wb0.Close SaveChanges:=False
-GoTo label2
-End If
+Set ws0 = wb0.Worksheets(ws1.Range("C" & Format(i)).Value)
 MR0 = ws0.Cells(Rows.Count, 1).End(xlUp).Row
 ws0.Activate
 
@@ -425,7 +392,6 @@ End If
 End If
 Next
 wb0.Close
-label2:
 Next
 Application.ScreenUpdating = True
 Application.DisplayAlerts = True
@@ -499,11 +465,9 @@ Application.StatusBar = "売上データ読み込み中"
 Workbooks.Open Filename:=ws1.Range("G" & Format(3)).Value, UpdateLinks:=False
 Set wb2 = ActiveWorkbook
 salesSheetName = Trim$(CStr(ws1.Range("H" & Format(3)).Value))
-Set ws2 = Nothing
-If Not TryGetSheetByNameLooseLocal(wb2, salesSheetName, ws2) Then
-    MsgBox "操作画面H3の売上データシートが見つかりません: " & salesSheetName, vbExclamation
-    GoTo SafeExit
-End If
+On Error Resume Next
+Set ws2 = wb2.Worksheets(salesSheetName)
+On Error GoTo 0
 If ws2 Is Nothing Then
     MsgBox "操作画面H3の売上データシートが見つかりません: " & salesSheetName, vbExclamation
     GoTo SafeExit
@@ -512,11 +476,9 @@ Application.StatusBar = "経費データ読み込み中"
 Workbooks.Open Filename:=ws1.Range("G" & Format(4)).Value, UpdateLinks:=False
 Set wb3 = ActiveWorkbook
 expenseSheetName = Trim$(CStr(ws1.Range("H" & Format(4)).Value))
-Set ws3 = Nothing
-If Not TryGetSheetByNameLooseLocal(wb3, expenseSheetName, ws3) Then
-    MsgBox "操作画面H4の経費データシートが見つかりません: " & expenseSheetName, vbExclamation
-    GoTo SafeExit
-End If
+On Error Resume Next
+Set ws3 = wb3.Worksheets(expenseSheetName)
+On Error GoTo 0
 If ws3 Is Nothing Then
     MsgBox "操作画面H4の経費データシートが見つかりません: " & expenseSheetName, vbExclamation
     GoTo SafeExit
@@ -526,11 +488,9 @@ Set ws3Kihon = ws3
 Dim kihonSheetName As String
 kihonSheetName = Trim$(CStr(ws1.Range("I4").Value))
 If kihonSheetName <> "" Then
-    Set ws3Kihon = Nothing
-    If Not TryGetSheetByNameLooseLocal(wb3, kihonSheetName, ws3Kihon) Then
-        MsgBox "I4の基本給参照シートが見つかりません。H4シートを使用します。", vbExclamation
-        Set ws3Kihon = ws3
-    End If
+    On Error Resume Next
+    Set ws3Kihon = wb3.Worksheets(kihonSheetName)
+    On Error GoTo 0
     If ws3Kihon Is Nothing Then
         MsgBox "I4の基本給参照シートが見つかりません。H4シートを使用します。", vbExclamation
         Set ws3Kihon = ws3
@@ -561,12 +521,9 @@ For i = 3 To MR1
     Workbooks.Open Filename:=ws1.Range("B" & Format(i)).Value, UpdateLinks:=False
     Set wb0 = ActiveWorkbook
     targetSheetName = Trim$(CStr(ws1.Range("C" & Format(i)).Value))
-    Set ws0 = Nothing
-    If Not TryGetSheetByNameLooseLocal(wb0, targetSheetName, ws0) Then
-        MsgBox "操作画面C" & i & "のシートが見つかりません: " & targetSheetName, vbExclamation
-        wb0.Close SaveChanges:=False
-        GoTo NextWorkbook
-    End If
+    On Error Resume Next
+    Set ws0 = wb0.Worksheets(targetSheetName)
+    On Error GoTo 0
     If ws0 Is Nothing Then
         MsgBox "操作画面C" & i & "のシートが見つかりません: " & targetSheetName, vbExclamation
         wb0.Close SaveChanges:=False
