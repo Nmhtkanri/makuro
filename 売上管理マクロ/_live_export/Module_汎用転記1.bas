@@ -1,4 +1,4 @@
-Attribute VB_Name = "Module_”Ä—p“]‹L"
+Attribute VB_Name = "Module_”Ä—p“]‹L1"
 Option Explicit
 
 Private Const C_CHINGIN    As String = "’À‹à"
@@ -55,10 +55,10 @@ Public Sub ”Ä—p“]‹L_Sub(bookPath As String, ws3 As Worksheet, ws3Kihon As Worksh
             colItem = 11
             colMonStart = 12
         Case "Honda"
-            colItem     = 10
+            colItem = 10
             colMonStart = 11
         Case Else
-            colItem     = 11
+            colItem = 11
             colMonStart = 12
     End Select
 

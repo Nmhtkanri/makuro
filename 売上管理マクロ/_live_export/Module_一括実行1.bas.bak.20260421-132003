@@ -1,12 +1,8 @@
-Attribute VB_Name = "Module_一括実行"
+Attribute VB_Name = "Module_一括実行1"
 Option Explicit
 
 Public Sub 一括転記_SI()
     Call Tenki_Shubetsu("SI")
-End Sub
-
-Public Sub 一括転記_FS()
-    Call Tenki_Shubetsu("FS")
 End Sub
 
 Public Sub 一括転記_ホンダ()
@@ -22,7 +18,6 @@ Public Sub 一括転記_その他()
 End Sub
 
 Public Sub 一括転記_全部()
-    Call Tenki_Shubetsu("FS")
     Call Tenki_Shubetsu("SI")
     Call Tenki_Shubetsu("Honda")
     Call Tenki_Shubetsu("UAL")
@@ -91,7 +86,6 @@ Private Sub Tenki_Shubetsu(fmtCode As String)
 
         Dim isMatch As Boolean: isMatch = False
         Select Case fmtCode
-            Case "FS":    isMatch = (cellType = "FS")
             Case "SI":    isMatch = (cellType = "SI")
             Case "Honda": isMatch = (cellType = "ホンダ")
             Case "UAL":   isMatch = (cellType = "UAL")

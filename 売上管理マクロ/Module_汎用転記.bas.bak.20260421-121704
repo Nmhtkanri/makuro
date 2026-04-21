@@ -51,9 +51,6 @@ Public Sub ”Ä—p“]‹L_Sub(bookPath As String, ws3 As Worksheet, ws3Kihon As Worksh
     Dim colMonStart As Long
     Dim colEmpNo   As Long: colEmpNo = 1
     Select Case formatType
-        Case "FS"
-            colItem = 11
-            colMonStart = 12
         Case "Honda"
             colItem     = 10
             colMonStart = 11
@@ -151,9 +148,9 @@ Public Sub ”Ä—p“]‹L_Sub(bookPath As String, ws3 As Worksheet, ws3Kihon As Worksh
                     If iName = C_CHINGIN Then
                         ws0.Cells(ir, T_mon).Value = 0
                         If wRowBase > 0 Then
-                            ws0.Cells(ir, T_mon).Value = GetBasePay_”Ä—p“]‹L(ws3Kihon, wRowBase)
+                            ws0.Cells(ir, T_mon).Value = GetBasePay(ws3Kihon, wRowBase)
                         ElseIf wRow > 0 Then
-                            ws0.Cells(ir, T_mon).Value = GetBasePay_”Ä—p“]‹L(ws3, wRow)
+                            ws0.Cells(ir, T_mon).Value = GetBasePay(ws3, wRow)
                         End If
                     ElseIf iName = C_KOKYAKU Or iName = C_KOKYAKU_TE Or iName = "On-call" Then
                         ws0.Cells(ir, T_mon).Value = 0
@@ -216,16 +213,12 @@ Finalize:
     ws1.Activate
 End Sub
 
-Private Function GetBasePay_”Ä—p“]‹L(ws As Worksheet, rowNum As Long) As Double
-    If ws Is Nothing Then Exit Function
-    If rowNum <= 0 Then Exit Function
-    On Error Resume Next
-    GetBasePay_”Ä—p“]‹L = ws.Cells(rowNum, 13).Value + ws.Cells(rowNum, 14).Value + _
-                        ws.Cells(rowNum, 15).Value + ws.Cells(rowNum, 16).Value + _
-                        ws.Cells(rowNum, 17).Value + ws.Cells(rowNum, 18).Value + _
-                        ws.Cells(rowNum, 19).Value + ws.Cells(rowNum, 20).Value + _
-                        ws.Cells(rowNum, 21).Value + ws.Cells(rowNum, 23).Value + _
-                        ws.Cells(rowNum, 24).Value + ws.Cells(rowNum, 25).Value + _
-                        ws.Cells(rowNum, 26).Value
-    On Error GoTo 0
+Private Function GetBasePay(ws As Worksheet, rowNum As Long) As Double
+    GetBasePay = ws.Cells(rowNum, 13).Value + ws.Cells(rowNum, 14).Value + _
+                 ws.Cells(rowNum, 15).Value + ws.Cells(rowNum, 16).Value + _
+                 ws.Cells(rowNum, 17).Value + ws.Cells(rowNum, 18).Value + _
+                 ws.Cells(rowNum, 19).Value + ws.Cells(rowNum, 20).Value + _
+                 ws.Cells(rowNum, 21).Value + ws.Cells(rowNum, 23).Value + _
+                 ws.Cells(rowNum, 24).Value + ws.Cells(rowNum, 25).Value + _
+                 ws.Cells(rowNum, 26).Value
 End Function

@@ -79,16 +79,6 @@ Application.DisplayAlerts = True
 Application.StatusBar = "èIóπ"
 
 End Sub
-
-Private Function GetBasePay(ws As Worksheet, rowNum As Long) As Double
-    GetBasePay = ws.Cells(rowNum, 13).Value + ws.Cells(rowNum, 14).Value + _
-                 ws.Cells(rowNum, 15).Value + ws.Cells(rowNum, 16).Value + _
-                 ws.Cells(rowNum, 17).Value + ws.Cells(rowNum, 18).Value + _
-                 ws.Cells(rowNum, 19).Value + ws.Cells(rowNum, 20).Value + _
-                 ws.Cells(rowNum, 21).Value + ws.Cells(rowNum, 23).Value + _
-                 ws.Cells(rowNum, 24).Value + ws.Cells(rowNum, 25).Value + _
-                 ws.Cells(rowNum, 26).Value
-End Function
 Sub Ç‹Ç∆Çﬂ()
 
 
