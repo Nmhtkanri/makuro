@@ -27,6 +27,88 @@ Private Function TryGetSheetByNameLooseLocal(ByVal wb As Workbook, ByVal targetN
     Next ws
 End Function
 
+Private Function ExtractMonthNumberLocal(ByVal monthText As Variant) As Long
+    If IsDate(monthText) Then
+        ExtractMonthNumberLocal = Month(CDate(monthText))
+        Exit Function
+    End If
+
+    Dim txt As String
+    txt = Trim$(CStr(monthText))
+    txt = Replace$(txt, "　", "")
+    txt = Replace$(txt, " ", "")
+    txt = Replace$(txt, "月", "")
+    If txt = "" Then Exit Function
+
+    Dim parts() As String
+    If InStr(txt, "-") > 0 Then
+        parts = Split(txt, "-")
+        txt = parts(UBound(parts))
+    ElseIf InStr(txt, "/") > 0 Then
+        parts = Split(txt, "/")
+        txt = parts(UBound(parts))
+    ElseIf InStr(txt, ".") > 0 Then
+        parts = Split(txt, ".")
+        txt = parts(UBound(parts))
+    End If
+
+    If IsNumeric(txt) Then
+        ExtractMonthNumberLocal = CLng(Val(txt))
+        If ExtractMonthNumberLocal < 1 Or ExtractMonthNumberLocal > 12 Then
+            ExtractMonthNumberLocal = 0
+        End If
+    End If
+End Function
+
+Private Function FindSalesMonthColumnLocal(ByVal wsSales As Worksheet, ByVal thisMonth As String) As Long
+    If wsSales Is Nothing Then Exit Function
+
+    Dim matchCol As Variant
+    matchCol = Application.Match(thisMonth, wsSales.Rows(2), 0)
+    If Not IsError(matchCol) Then
+        FindSalesMonthColumnLocal = CLng(matchCol)
+        Exit Function
+    End If
+
+    Dim targetMonth As Long
+    targetMonth = ExtractMonthNumberLocal(thisMonth)
+    If targetMonth = 0 Then Exit Function
+
+    Dim lastCol As Long
+    lastCol = wsSales.Cells(2, wsSales.Columns.Count).End(xlToLeft).Column
+
+    Dim col As Long
+    For col = 1 To lastCol
+        If ExtractMonthNumberLocal(wsSales.Cells(2, col).Value) = targetMonth Then
+            FindSalesMonthColumnLocal = col
+            Exit Function
+        End If
+    Next col
+End Function
+
+Private Function GetDispatchAmountLocal(ByVal wsSales As Worksheet, ByVal monthCol As Long, ByVal empNo As String) As Double
+    If wsSales Is Nothing Then Exit Function
+    If monthCol <= 0 Then Exit Function
+    empNo = Trim$(empNo)
+    If empNo = "" Then Exit Function
+
+    On Error Resume Next
+    GetDispatchAmountLocal = Application.WorksheetFunction.SumIfs( _
+        wsSales.Columns(monthCol), _
+        wsSales.Columns(1), "売上高", _
+        wsSales.Columns(16), empNo)
+    If Err.Number <> 0 Then
+        Err.Clear
+        GetDispatchAmountLocal = Application.SumIfs( _
+            wsSales.Columns(monthCol), _
+            wsSales.Columns(1), "売上高", _
+            wsSales.Columns(16), empNo)
+    End If
+    On Error GoTo 0
+
+    GetDispatchAmountLocal = Round(GetDispatchAmountLocal / 1.1, 0)
+End Function
+
 Sub ワークシート一覧()
 
 Application.ScreenUpdating = False
@@ -79,16 +161,6 @@ Application.DisplayAlerts = True
 Application.StatusBar = "終了"
 
 End Sub
-
-Private Function GetBasePay(ws As Worksheet, rowNum As Long) As Double
-    GetBasePay = ws.Cells(rowNum, 13).Value + ws.Cells(rowNum, 14).Value + _
-                 ws.Cells(rowNum, 15).Value + ws.Cells(rowNum, 16).Value + _
-                 ws.Cells(rowNum, 17).Value + ws.Cells(rowNum, 18).Value + _
-                 ws.Cells(rowNum, 19).Value + ws.Cells(rowNum, 20).Value + _
-                 ws.Cells(rowNum, 21).Value + ws.Cells(rowNum, 23).Value + _
-                 ws.Cells(rowNum, 24).Value + ws.Cells(rowNum, 25).Value + _
-                 ws.Cells(rowNum, 26).Value
-End Function
 Sub まとめ()
 
 
@@ -550,6 +622,8 @@ End If
 wb1.Activate
 
 this_month = ws1.Range("G1").Value & "月"
+Dim salesMonCol As Long
+salesMonCol = FindSalesMonthColumnLocal(ws2, this_month)
 
 ' === 給与明細データシートの列確認（初回のみ） ===
 If i = 3 Then
@@ -663,29 +737,45 @@ For i = 3 To MR1
                         If wRowBase = 0 Then wRowBase = wRow
                     End If
                 End If
+                If ws0.Name <> "UAL業務委託" Then
+                    Dim dispatchValue As Double
+                    dispatchValue = GetDispatchAmountLocal(ws2, salesMonCol, CStr(ws0.Cells(j, 1).Value))
+                    If dispatchValue = 0 Then
+                        ws0.Cells(j, T_mon).Value = ""
+                    Else
+                        ws0.Cells(j, T_mon).Value = dispatchValue
+                    End If
+                Else
+                    ws0.Cells(j, T_mon).Value = ""
+                End If
             End If
 
             Select Case ualItemName
                 Case "賃金"
                     ws0.Cells(j, T_mon).Value = ""
                     If wRowBase > 0 Then
-                        ws0.Cells(j, T_mon).Value = ws3Kihon.Cells(wRowBase, BASIC_PAY_COL).Value
+                        ws0.Cells(j, T_mon).Value = GetBasePay(ws3Kihon, wRowBase)
                     ElseIf wRow > 0 Then
-                        ws0.Cells(j, T_mon).Value = ws3.Cells(wRow, BASIC_PAY_COL).Value
+                        ws0.Cells(j, T_mon).Value = GetBasePay(ws3, wRow)
                     End If
                     If ws0.Cells(j, T_mon).Value = 0 Then ws0.Cells(j, T_mon).Value = "￥0"
-                Case "顧客対応当番", "顧客対応当番手当", "交通費"
-                    ws0.Cells(j, T_mon).Value = ""
-                    If wRow > 0 And dutyCol > 0 Then
-                        ws0.Cells(j, T_mon).Value = ws3.Cells(wRow, dutyCol).Value
+                Case "顧客対応当番", "顧客対応当番手当"
+                    ws0.Cells(j, T_mon).Value = 0
+                    If wRow > 0 Then ws0.Cells(j, T_mon).Value = ws3.Cells(wRow, 71).Value
+                Case "交通費"
+                    If Trim$(CStr(ws0.Cells(j + 2, 11).Value)) = "総受注金額" Then
+                        ws0.Cells(j, T_mon).Value = ""
+                    Else
+                        ws0.Cells(j, T_mon).Value = ""
+                        If wRow > 0 Then
+                            ws0.Cells(j, T_mon).Value = Round(ws3.Cells(wRow, 93).Value, 0)
+                            If ws0.Cells(j, T_mon).Value = 0 Then ws0.Cells(j, T_mon).Value = Round(ws3.Cells(wRow, 95).Value, 0)
+                        End If
+                        If ws0.Cells(j, T_mon).Value = 0 Then ws0.Cells(j, T_mon).Value = "￥0"
                     End If
-                    If ws0.Cells(j, T_mon).Value = 0 Then ws0.Cells(j, T_mon).Value = "￥0"
                 Case "通勤定期代"
                     ws0.Cells(j, T_mon).Value = ""
-                    If wRow > 0 Then
-                        ws0.Cells(j, T_mon).Value = ws3.Cells(wRow, 93).Value
-                        If ws0.Cells(j, T_mon).Value = 0 Then ws0.Cells(j, T_mon).Value = ws3.Cells(wRow, 95).Value
-                    End If
+                    If wRow > 0 Then ws0.Cells(j, T_mon).Value = Round(ws3.Cells(wRow, 93).Value, 0)
                     If ws0.Cells(j, T_mon).Value = 0 Then ws0.Cells(j, T_mon).Value = "￥0"
                 Case "健康保険"
                     ws0.Cells(j, T_mon).Value = ""
@@ -767,27 +857,24 @@ For i = 3 To MR1
                     If baseRowFS + 1 <= wsDell.Rows.Count Then
                         wsDell.Cells(baseRowFS + 1, T_mon2).Value = ""
                         If wRowBase > 0 Then
-                            wsDell.Cells(baseRowFS + 1, T_mon2).Value = ws3Kihon.Cells(wRowBase, BASIC_PAY_COL).Value '基本給（基本給参照シート優先）
+                            wsDell.Cells(baseRowFS + 1, T_mon2).Value = GetBasePay(ws3Kihon, wRowBase) '基本給（基本給参照シート優先）
                         Else
-                            wsDell.Cells(baseRowFS + 1, T_mon2).Value = ws3.Cells(wRow, BASIC_PAY_COL).Value '基本給
+                            wsDell.Cells(baseRowFS + 1, T_mon2).Value = GetBasePay(ws3, wRow) '基本給
                         End If
                         If wsDell.Cells(baseRowFS + 1, T_mon2).Value = 0 Then wsDell.Cells(baseRowFS + 1, T_mon2).Value = "￥0"
                     End If
                     
                     ' 当番手当（社員番号行+2）
                     If baseRowFS + 2 <= wsDell.Rows.Count Then
-                        wsDell.Cells(baseRowFS + 2, T_mon2).Value = ""
-                        If dutyCol > 0 Then
-                            wsDell.Cells(baseRowFS + 2, T_mon2).Value = ws3.Cells(wRow, dutyCol).Value
-                        End If
-                        If wsDell.Cells(baseRowFS + 2, T_mon2).Value = 0 Then wsDell.Cells(baseRowFS + 2, T_mon2).Value = "￥0"
+                        wsDell.Cells(baseRowFS + 2, T_mon2).Value = 0
+                        If wRow > 0 Then wsDell.Cells(baseRowFS + 2, T_mon2).Value = ws3.Cells(wRow, 71).Value
                     End If
                     
                     ' 交通費（社員番号行+3）- 非課税通勤費
                     If baseRowFS + 3 <= wsDell.Rows.Count Then
                         wsDell.Cells(baseRowFS + 3, T_mon2).Value = ""
-                        wsDell.Cells(baseRowFS + 3, T_mon2).Value = ws3.Cells(wRow, 93).Value '非課税通勤費
-                        If wsDell.Cells(baseRowFS + 3, T_mon2).Value = 0 Then wsDell.Cells(baseRowFS + 3, T_mon2).Value = ws3.Cells(wRow, 95).Value
+                        wsDell.Cells(baseRowFS + 3, T_mon2).Value = Round(ws3.Cells(wRow, 93).Value, 0) '非課税通勤費
+                        If wsDell.Cells(baseRowFS + 3, T_mon2).Value = 0 Then wsDell.Cells(baseRowFS + 3, T_mon2).Value = Round(ws3.Cells(wRow, 95).Value, 0)
                         If wsDell.Cells(baseRowFS + 3, T_mon2).Value = 0 Then wsDell.Cells(baseRowFS + 3, T_mon2).Value = "￥0"
                     End If
                     
@@ -831,28 +918,25 @@ For i = 3 To MR1
         If (j - 3) Mod 8 = 1 Then
             ws0.Cells(j, T_mon).Value = ""
             If wRowBase > 0 Then
-                ws0.Cells(j, T_mon).Value = ws3Kihon.Cells(wRowBase, BASIC_PAY_COL).Value '基本給（基本給参照シート優先）
+                ws0.Cells(j, T_mon).Value = GetBasePay(ws3Kihon, wRowBase) '基本給（基本給参照シート優先）
             ElseIf wRow > 0 Then
-                ws0.Cells(j, T_mon).Value = ws3.Cells(wRow, BASIC_PAY_COL).Value '基本給
+                ws0.Cells(j, T_mon).Value = GetBasePay(ws3, wRow) '基本給
             End If
             If ws0.Cells(j, T_mon).Value = 0 Then ws0.Cells(j, T_mon).Value = "￥0"
         End If
 
         ' 顧客対応当番手当（余り2）
         If (j - 3) Mod 8 = 2 Then
-            ws0.Cells(j, T_mon).Value = ""
-            If wRow > 0 And dutyCol > 0 Then
-                ws0.Cells(j, T_mon).Value = ws3.Cells(wRow, dutyCol).Value
-            End If
-            If ws0.Cells(j, T_mon).Value = 0 Then ws0.Cells(j, T_mon).Value = "￥0"
+            ws0.Cells(j, T_mon).Value = 0
+            If wRow > 0 Then ws0.Cells(j, T_mon).Value = ws3.Cells(wRow, 71).Value
         End If
 
         ' 交通費（余り3）- 非課税通勤費
         If (j - 3) Mod 8 = 3 Then
             ws0.Cells(j, T_mon).Value = ""
             If wRow > 0 Then
-                ws0.Cells(j, T_mon).Value = ws3.Cells(wRow, 93).Value '非課税通勤費
-                If ws0.Cells(j, T_mon).Value = 0 Then ws0.Cells(j, T_mon).Value = ws3.Cells(wRow, 95).Value
+                ws0.Cells(j, T_mon).Value = Round(ws3.Cells(wRow, 93).Value, 0) '非課税通勤費
+                If ws0.Cells(j, T_mon).Value = 0 Then ws0.Cells(j, T_mon).Value = Round(ws3.Cells(wRow, 95).Value, 0)
             End If
             If ws0.Cells(j, T_mon).Value = 0 Then ws0.Cells(j, T_mon).Value = "￥0"
         End If
@@ -1082,568 +1166,12 @@ Application.StatusBar = "終了"
 
 End Sub
 
-
-
-'------------------------------------------------
-' Public Sub freeeデータ転記()
-'   freeeデータシートのA列=売上高、P列=従業員番号の行を、
-'   各転記先ブックの総受注金額行に書き込みます。
-'   対象年月は 操作画面 K1 (YYYY-MM) もしくは F1(令和)+G1(月) から自動決定。
-'------------------------------------------------
-Public Sub freeeデータ転記()
-    Application.ScreenUpdating = False
-    Application.DisplayAlerts = False
-    Application.Calculation = xlCalculationManual
-    Application.StatusBar = "freee転記 開始"
-
-    Dim wb1 As Workbook: Set wb1 = ThisWorkbook
-    Dim ws1 As Worksheet
-    Dim wsFree As Worksheet
-    Dim wbFree As Workbook
-    Dim wbFreeOpenedHere As Boolean
-    wbFreeOpenedHere = False
-    On Error Resume Next
-    Set ws1 = wb1.Worksheets("操作画面")
-    On Error GoTo 0
-    If ws1 Is Nothing Then
-        MsgBox "操作画面シートが見つかりません", vbExclamation
-        GoTo CleanupFree
-    End If
-
-    ' 操作画面3行目以降を走査し、H列に"freee"を含む行のG列をパスとする
-    Dim freePath As String: freePath = ""
-    Dim freeSheet As String: freeSheet = ""
-    Dim lastSetRow As Long
-    lastSetRow = ws1.Cells(ws1.Rows.Count, 8).End(xlUp).Row
-    If lastSetRow < 3 Then lastSetRow = 3
-    Dim sr As Long
-    For sr = 3 To lastSetRow
-        Dim hv As String
-        hv = Trim(CStr(ws1.Cells(sr, 8).Value))
-        If InStr(hv, "freee") > 0 Then
-            freePath = Trim(CStr(ws1.Cells(sr, 7).Value))
-            freeSheet = hv
-            Exit For
-        End If
-    Next sr
-
-    If freePath = "" Or freeSheet = "" Then
-        MsgBox "操作画面にfreeeデータの設定が見つかりません。" & vbCrLf & _
-               "G列にブックパス、H列にシート名（freeeデータ）を設定してください。", vbExclamation
-        GoTo CleanupFree
-    End If
-
-    If Dir(freePath) = "" Then
-        MsgBox "freeeデータ源ブックが存在しません:" & vbCrLf & freePath, vbExclamation
-        GoTo CleanupFree
-    End If
-
-    ' 既に開いているブックを優先して使用
-    Dim wbProbeF As Workbook
-    For Each wbProbeF In Workbooks
-        If StrComp(wbProbeF.FullName, freePath, vbTextCompare) = 0 Then
-            Set wbFree = wbProbeF
-            Exit For
-        End If
-    Next wbProbeF
-    If wbFree Is Nothing Then
-        On Error Resume Next
-        Set wbFree = Workbooks.Open(Filename:=freePath, UpdateLinks:=False, ReadOnly:=True)
-        On Error GoTo 0
-        If Not wbFree Is Nothing Then wbFreeOpenedHere = True
-    End If
-    If wbFree Is Nothing Then
-        MsgBox "freeeデータ源ブックを開けませんでした:" & vbCrLf & freePath, vbExclamation
-        GoTo CleanupFree
-    End If
-
-    If Not TryGetSheetByNameLooseLocal(wbFree, freeSheet, wsFree) Then
-        MsgBox "シート『" & freeSheet & "』が見つかりません:" & vbCrLf & freePath, vbExclamation
-        GoTo CleanupFree
-    End If
-
-    Dim targetYM As String
-    targetYM = freeeDataGetTargetYM(ws1)
-    If targetYM = "" Then
-        MsgBox "対象年月の判定に失敗しました。操作画面 K1 に ""2026-03"" 形式で入力するか、F1(令和番号)とG1(月)を設定してください。", vbExclamation
-        GoTo CleanupFree
-    End If
-    Application.StatusBar = "freee転記 対象年月: " & targetYM
-
-    ' freeeデータ側の対象年月列を検索 (1行目→2行目の順に探索)
-    Dim freeMonCol As Long: freeMonCol = freeeDataFindMonthCol(wsFree, targetYM)
-    If freeMonCol = 0 Then
-        MsgBox "freeeデータに " & targetYM & " の列が見つかりません。", vbExclamation
-        GoTo CleanupFree
-    End If
-
-    ' freeeデータ行を集計 (A列に"売上高"を含み、P列が数値の行)
-    Dim dictFree As Object
-    Set dictFree = CreateObject("Scripting.Dictionary")
-    Dim lastFreeRow As Long
-    lastFreeRow = wsFree.Cells(wsFree.Rows.Count, 1).End(xlUp).Row
-    Dim r As Long
-    For r = 2 To lastFreeRow
-        Dim aVal As String
-        aVal = CStr(wsFree.Cells(r, 1).Value)
-        If InStr(aVal, "売上高") > 0 Then
-            Dim pRaw As Variant
-            pRaw = wsFree.Cells(r, 16).Value
-            If IsNumeric(pRaw) And Trim(CStr(pRaw)) <> "" Then
-                Dim empKey As String
-                empKey = CStr(CLng(pRaw))
-                Dim amt As Double: amt = 0
-                If IsNumeric(wsFree.Cells(r, freeMonCol).Value) Then
-                    amt = CDbl(wsFree.Cells(r, freeMonCol).Value)
-                End If
-                If dictFree.Exists(empKey) Then
-                    dictFree(empKey) = CDbl(dictFree(empKey)) + amt
-                Else
-                    dictFree(empKey) = amt
-                End If
-            End If
-        End If
-    Next r
-
-    If dictFree.Count = 0 Then
-        MsgBox "freeeデータに売上高の行が見つかりませんでした。", vbInformation
-        GoTo CleanupFree
-    End If
-
-    ' 操作画面の各行について転記先ブックを開き、派遣金額行へ書き込み
-    Dim lastOpeRow As Long
-    lastOpeRow = ws1.Cells(ws1.Rows.Count, 2).End(xlUp).Row
-    Dim tgtMonKey As String
-    tgtMonKey = CStr(ws1.Range("G1").Value) & "月"
-
-    Dim writeCnt As Long: writeCnt = 0
-    Dim bookCnt As Long: bookCnt = 0
-
-    Dim i As Long
-    For i = 3 To lastOpeRow
-        Dim bookPath As String
-        bookPath = Trim(CStr(ws1.Cells(i, 2).Value))
-        If bookPath = "" Then GoTo NextOpeRow
-
-        Dim tgtSheetName As String
-        tgtSheetName = Trim$(CStr(ws1.Cells(i, 3).Value))
-
-        Dim wbTgt As Workbook
-        Dim wasOpen As Boolean: wasOpen = False
-        Dim wbProbe As Workbook
-        Set wbTgt = Nothing
-        For Each wbProbe In Workbooks
-            If wbProbe.FullName = bookPath Then
-                Set wbTgt = wbProbe
-                wasOpen = True
-                Exit For
-            End If
-        Next wbProbe
-        If wbTgt Is Nothing Then
-            On Error Resume Next
-            Set wbTgt = Workbooks.Open(Filename:=bookPath, UpdateLinks:=False)
-            On Error GoTo 0
-        End If
-        If wbTgt Is Nothing Then GoTo NextOpeRow
-
-        Application.StatusBar = "freee転記: " & wbTgt.Name
-
-        Dim tgtWs As Worksheet
-        Set tgtWs = Nothing
-        If tgtSheetName <> "" Then
-            If Not TryGetSheetByNameLooseLocal(wbTgt, tgtSheetName, tgtWs) Then
-                Set tgtWs = Nothing
-            End If
-        End If
-
-        Dim wsCur As Worksheet
-        For Each wsCur In wbTgt.Worksheets
-            ' 受託/常註シートはスキップ
-            If InStr(wsCur.Name, "その他受託") > 0 Or InStr(wsCur.Name, "その他常註") > 0 Or InStr(wsCur.Name, "DELL委託人件費") > 0 Then GoTo NextCurSheet
-            If Not tgtWs Is Nothing Then
-                If wsCur.Name <> tgtWs.Name Then GoTo NextCurSheet
-            End If
-
-            Dim itemCol As Long
-            itemCol = freeeDataDetectItemCol(wsCur)
-            If itemCol = 0 Then GoTo NextCurSheet
-
-            Dim tgtMonCol As Long: tgtMonCol = 0
-            Dim colScanMax As Long
-            colScanMax = wsCur.Cells(1, wsCur.Columns.Count).End(xlToLeft).Column
-            If colScanMax < 1 Then colScanMax = 1
-            Dim cc As Long
-            For cc = 1 To colScanMax
-                If CStr(wsCur.Cells(1, cc).Value) = tgtMonKey Then
-                    tgtMonCol = cc
-                    Exit For
-                End If
-            Next cc
-            If tgtMonCol = 0 Then GoTo NextCurSheet
-
-            Dim lastWsRow As Long
-            lastWsRow = wsCur.Cells(wsCur.Rows.Count, itemCol).End(xlUp).Row
-            Dim wr As Long
-            For wr = 2 To lastWsRow
-                If InStr(CStr(wsCur.Cells(wr, itemCol).Value), "派遣金額") > 0 Then
-                    Dim empNoStr As String: empNoStr = ""
-                    Dim bk As Long
-                    Dim minBk As Long
-                    minBk = wr - 20
-                    If minBk < 2 Then minBk = 2
-                    For bk = wr To minBk Step -1
-                        Dim aCell As Variant
-                        aCell = wsCur.Cells(bk, 1).Value
-                        If IsNumeric(aCell) And Trim(CStr(aCell)) <> "" Then
-                            empNoStr = CStr(CLng(aCell))
-                            Exit For
-                        End If
-                    Next bk
-                    If empNoStr <> "" Then
-                        If dictFree.Exists(empNoStr) Then
-                            wsCur.Cells(wr, tgtMonCol).Value = CDbl(dictFree(empNoStr))
-                            writeCnt = writeCnt + 1
-                        Else
-                            wsCur.Cells(wr, tgtMonCol).Value = 0
-                        End If
-                        wsCur.Cells(wr, tgtMonCol).Font.ColorIndex = 1
-                    End If
-                End If
-            Next wr
-NextCurSheet:
-        Next wsCur
-
-        wbTgt.Save
-        If Not wasOpen Then wbTgt.Close SaveChanges:=False
-        bookCnt = bookCnt + 1
-NextOpeRow:
-    Next i
-
-    MsgBox "freee売上高→派遣金額転記 完了" & vbCrLf & _
-           "対象年月: " & targetYM & vbCrLf & _
-           "処理ブック数: " & bookCnt & vbCrLf & _
-           "書き込み件数: " & writeCnt & "件", vbInformation
-
-CleanupFree:
-    If Not wbFree Is Nothing Then
-        If wbFreeOpenedHere Then
-            On Error Resume Next
-            wbFree.Close SaveChanges:=False
-            On Error GoTo 0
-        End If
-    End If
-    Application.ScreenUpdating = True
-    Application.DisplayAlerts = True
-    Application.Calculation = xlCalculationAutomatic
-    Application.StatusBar = "終了"
-    If Not wb1 Is Nothing Then
-        wb1.Activate
-        If Not ws1 Is Nothing Then ws1.Activate
-    End If
-End Sub
-
-
-'------------------------------------------------
-' Public Sub ホンダ交通費その他転記()
-'   操作画面から「交通費その他転記」対象の書き込み先を抽出して処理する。
-'   対象判定:
-'     - C列(WorkSheet)に値が入っている行 → そのシート1枚に書き込み
-'     - C列空 かつ B列に「ホンダ」を含む行 → そのブックの全シート（「まとめ」除く）
-'   jinjer源: 操作画面 F列="経費" の行の G列(パス)/H列(シート名)
-'   書き込み先の J(10)列="交通費" の行に、A列社員番号 → jinjer 93列(非課税通勤費)
-'   93列が0の場合は CQ(95) 列をフォールバック。当月列は G1 & "月" で1行目から検出。
-'------------------------------------------------
-Public Sub ホンダ交通費その他転記()
-    Application.ScreenUpdating = False
-    Application.DisplayAlerts = False
-    Application.Calculation = xlCalculationManual
-    Application.StatusBar = "交通費その他転記 開始"
-
-    Dim wb1 As Workbook: Set wb1 = ThisWorkbook
-    Dim ws1 As Worksheet
-    Dim wbJ As Workbook
-    Dim wbJOpened As Boolean: wbJOpened = False
-
-    On Error Resume Next
-    Set ws1 = wb1.Worksheets("操作画面")
-    On Error GoTo 0
-    If ws1 Is Nothing Then
-        MsgBox "操作画面シートが見つかりません", vbExclamation
-        GoTo CleanupHonda
-    End If
-
-    ' jinjer源を特定（操作画面F列=経費 の行のG列/H列）
-    Dim jinPath As String: jinPath = ""
-    Dim jinSheet As String: jinSheet = ""
-    Dim lastH As Long
-    lastH = ws1.Cells(ws1.Rows.Count, 8).End(xlUp).Row
-    Dim i As Long
-    For i = 3 To lastH
-        Dim fv As String: fv = Trim(CStr(ws1.Cells(i, 6).Value))
-        If InStr(fv, "経費") > 0 Then
-            jinPath = Trim(CStr(ws1.Cells(i, 7).Value))
-            jinSheet = Trim(CStr(ws1.Cells(i, 8).Value))
-            Exit For
-        End If
-    Next i
-    If jinPath = "" Or jinSheet = "" Then
-        MsgBox "操作画面に経費(jinjer)源の設定がありません（F列=経費, G列=パス, H列=シート名）", vbExclamation
-        GoTo CleanupHonda
-    End If
-    If Dir(jinPath) = "" Then
-        MsgBox "jinjer源が存在しません:" & vbCrLf & jinPath, vbExclamation
-        GoTo CleanupHonda
-    End If
-
-    ' jinjerブックを開く
-    Dim wbProbe As Workbook
-    For Each wbProbe In Workbooks
-        If StrComp(wbProbe.FullName, jinPath, vbTextCompare) = 0 Then
-            Set wbJ = wbProbe
-            Exit For
-        End If
-    Next wbProbe
-    If wbJ Is Nothing Then
-        On Error Resume Next
-        Set wbJ = Workbooks.Open(Filename:=jinPath, UpdateLinks:=False, ReadOnly:=True)
-        On Error GoTo 0
-        If Not wbJ Is Nothing Then wbJOpened = True
-    End If
-    If wbJ Is Nothing Then
-        MsgBox "jinjer源を開けませんでした:" & vbCrLf & jinPath, vbExclamation
-        GoTo CleanupHonda
-    End If
-
-    Dim wsJ As Worksheet
-    If Not TryGetSheetByNameLooseLocal(wbJ, jinSheet, wsJ) Then
-        MsgBox "jinjer シート『" & jinSheet & "』が見つかりません:" & vbCrLf & jinPath, vbExclamation
-        GoTo CleanupHonda
-    End If
-
-    ' 社員番号(A列) → 非課税通勤費(93列, 0なら95列)
-    Dim dictT As Object
-    Set dictT = CreateObject("Scripting.Dictionary")
-    Dim lastJ As Long
-    lastJ = wsJ.Cells(wsJ.Rows.Count, 1).End(xlUp).Row
-    Dim jr As Long
-    For jr = 2 To lastJ
-        Dim aV As Variant: aV = wsJ.Cells(jr, 1).Value
-        If IsNumeric(aV) And Trim(CStr(aV)) <> "" Then
-            Dim eKey As String: eKey = CStr(CLng(aV))
-            Dim vVal As Double: vVal = 0
-            If IsNumeric(wsJ.Cells(jr, 93).Value) Then vVal = CDbl(wsJ.Cells(jr, 93).Value)
-            If vVal = 0 And IsNumeric(wsJ.Cells(jr, 95).Value) Then vVal = CDbl(wsJ.Cells(jr, 95).Value)
-            dictT(eKey) = vVal
-        End If
-    Next jr
-
-    Dim tgtMonKey As String
-    tgtMonKey = CStr(ws1.Range("G1").Value) & "月"
-
-    ' 操作画面を走査して対象ブック×シートを処理
-    Dim lastSet As Long
-    lastSet = ws1.Cells(ws1.Rows.Count, 2).End(xlUp).Row
-    Dim totalCnt As Long: totalCnt = 0
-    Dim sheetCnt As Long: sheetCnt = 0
-    Dim bookProcCnt As Long: bookProcCnt = 0
-
-    For i = 3 To lastSet
-        Dim bookPath As String: bookPath = Trim(CStr(ws1.Cells(i, 2).Value))
-        Dim sheetName As String: sheetName = Trim(CStr(ws1.Cells(i, 3).Value))
-        If bookPath = "" Then GoTo NextSetupRow
-
-        Dim isTarget As Boolean: isTarget = False
-        If sheetName <> "" Then
-            isTarget = True  ' シート名指定ありは必ず対象
-        ElseIf InStr(bookPath, "ホンダ") > 0 Then
-            isTarget = True  ' ホンダブックはシート指定なくても対象
-        End If
-        If Not isTarget Then GoTo NextSetupRow
-
-        If Dir(bookPath) = "" Then
-            Debug.Print "書き込み先が存在しません(SKIP): " & bookPath
-            GoTo NextSetupRow
-        End If
-
-        ' 対象ブックを開く
-        Dim wbH As Workbook
-        Dim wbHOpened As Boolean: wbHOpened = False
-        Set wbH = Nothing
-        For Each wbProbe In Workbooks
-            If StrComp(wbProbe.FullName, bookPath, vbTextCompare) = 0 Then
-                Set wbH = wbProbe
-                Exit For
-            End If
-        Next wbProbe
-        If wbH Is Nothing Then
-            On Error Resume Next
-            Set wbH = Workbooks.Open(Filename:=bookPath, UpdateLinks:=False)
-            On Error GoTo 0
-            If Not wbH Is Nothing Then wbHOpened = True
-        End If
-        If wbH Is Nothing Then GoTo NextSetupRow
-
-        Application.StatusBar = "交通費その他転記: " & wbH.Name
-
-        ' 対象シート決定
-        Dim wsH As Worksheet
-        If sheetName <> "" Then
-            Dim wsHTarget As Worksheet
-            If TryGetSheetByNameLooseLocal(wbH, sheetName, wsHTarget) Then
-                Call HondaKotsuhiWriteSheet(wsHTarget, tgtMonKey, dictT, totalCnt, sheetCnt)
-            Else
-                Debug.Print "シート未検出(SKIP): " & bookPath & " / " & sheetName
-            End If
-        Else
-            For Each wsH In wbH.Worksheets
-                If InStr(wsH.Name, "まとめ") > 0 Then GoTo NextSheetInLoop
-                Call HondaKotsuhiWriteSheet(wsH, tgtMonKey, dictT, totalCnt, sheetCnt)
-NextSheetInLoop:
-            Next wsH
-        End If
-
-        wbH.Save
-        If wbHOpened Then wbH.Close SaveChanges:=False
-        bookProcCnt = bookProcCnt + 1
-NextSetupRow:
-    Next i
-
-    MsgBox "交通費その他転記 完了" & vbCrLf & _
-           "処理ブック数: " & bookProcCnt & vbCrLf & _
-           "処理シート数: " & sheetCnt & vbCrLf & _
-           "書き込み件数: " & totalCnt & "件", vbInformation
-
-CleanupHonda:
-    If Not wbJ Is Nothing Then
-        If wbJOpened Then
-            On Error Resume Next
-            wbJ.Close SaveChanges:=False
-            On Error GoTo 0
-        End If
-    End If
-    Application.ScreenUpdating = True
-    Application.DisplayAlerts = True
-    Application.Calculation = xlCalculationAutomatic
-    Application.StatusBar = "終了"
-    If Not wb1 Is Nothing Then
-        wb1.Activate
-        If Not ws1 Is Nothing Then ws1.Activate
-    End If
-End Sub
-
-Private Sub HondaKotsuhiWriteSheet(wsH As Worksheet, ByVal tgtMonKey As String, dictT As Object, ByRef totalCnt As Long, ByRef sheetCnt As Long)
-    If wsH Is Nothing Then Exit Sub
-
-    ' 月列検出
-    Dim tgtMonCol As Long: tgtMonCol = 0
-    Dim maxCH As Long
-    maxCH = wsH.Cells(1, wsH.Columns.Count).End(xlToLeft).Column
-    If maxCH < 1 Then maxCH = 1
-    Dim cc As Long
-    For cc = 1 To maxCH
-        If CStr(wsH.Cells(1, cc).Value) = tgtMonKey Then
-            tgtMonCol = cc
-            Exit For
-        End If
-    Next cc
-    If tgtMonCol = 0 Then Exit Sub
-
-    ' 項目列=J(10) で「交通費その他」行
-    Dim lastRH As Long
-    lastRH = wsH.Cells(wsH.Rows.Count, 10).End(xlUp).Row
-    Dim wr As Long
-    Dim writeCntLocal As Long: writeCntLocal = 0
-    For wr = 2 To lastRH
-        If InStr(CStr(wsH.Cells(wr, 10).Value), "交通費") > 0 Then
-            Dim aCell As Variant: aCell = wsH.Cells(wr, 1).Value
-            If IsNumeric(aCell) And Trim(CStr(aCell)) <> "" Then
-                Dim eK As String: eK = CStr(CLng(aCell))
-                If dictT.Exists(eK) Then
-                    wsH.Cells(wr, tgtMonCol).Value = CDbl(dictT(eK))
-                    wsH.Cells(wr, tgtMonCol).Font.ColorIndex = 1
-                    writeCntLocal = writeCntLocal + 1
-                End If
-            End If
-        End If
-    Next wr
-    totalCnt = totalCnt + writeCntLocal
-    sheetCnt = sheetCnt + 1
-End Sub
-
-Private Function freeeDataGetTargetYM(ws1 As Worksheet) As String
-    Dim kv As String
-    kv = Trim(CStr(ws1.Range("K1").Value))
-    If Len(kv) = 7 Then
-        If Mid$(kv, 5, 1) = "-" Then
-            If IsNumeric(Left$(kv, 4)) And IsNumeric(Right$(kv, 2)) Then
-                freeeDataGetTargetYM = kv
-                Exit Function
-            End If
-        End If
-    End If
-    Dim fv As String: fv = Trim(CStr(ws1.Range("F1").Value))
-    Dim gv As String: gv = Trim(CStr(ws1.Range("G1").Value))
-    If fv = "" Or gv = "" Then Exit Function
-    Dim reiwaNum As Long
-    On Error Resume Next
-    If Left$(UCase$(fv), 1) = "R" Then
-        reiwaNum = CLng(Mid$(fv, 2))
-    Else
-        reiwaNum = CLng(fv)
-    End If
-    If Err.Number <> 0 Then Err.Clear: Exit Function
-    On Error GoTo 0
-    If reiwaNum <= 0 Then Exit Function
-    Dim baseYear As Long: baseYear = 2018 + reiwaNum
-    Dim monthNum As Long
-    On Error Resume Next
-    monthNum = CLng(gv)
-    If Err.Number <> 0 Then Err.Clear: Exit Function
-    On Error GoTo 0
-    If monthNum < 1 Or monthNum > 12 Then Exit Function
-    ' freeeは鯉年度シフトなし（暦年月のまま）
-    freeeDataGetTargetYM = Format$(baseYear, "0000") & "-" & Format$(monthNum, "00")
-End Function
-
-Private Function freeeDataFindMonthCol(ws As Worksheet, ByVal targetYM As String) As Long
-    If ws Is Nothing Then Exit Function
-    Dim hdrRow As Long
-    For hdrRow = 1 To 2
-        Dim maxCol As Long
-        maxCol = ws.Cells(hdrRow, ws.Columns.Count).End(xlToLeft).Column
-        If maxCol < 1 Then maxCol = 1
-        Dim c As Long
-        For c = 1 To maxCol
-            Dim v As Variant
-            v = ws.Cells(hdrRow, c).Value
-            Dim sv As String
-            If IsDate(v) Then
-                sv = Format(v, "yyyy-mm")
-            Else
-                sv = Trim(CStr(v))
-            End If
-            If sv = targetYM Then
-                freeeDataFindMonthCol = c
-                Exit Function
-            End If
-        Next c
-    Next hdrRow
-End Function
-
-Private Function freeeDataDetectItemCol(ws As Worksheet) As Long
-    If ws Is Nothing Then Exit Function
-    ' 2-15行目に限定してK列＝J列の順に「派遣金額」を探す
-    Dim r As Long
-    For r = 2 To 15
-        If InStr(CStr(ws.Cells(r, 11).Value), "派遣金額") > 0 Then
-            freeeDataDetectItemCol = 11
-            Exit Function
-        End If
-    Next r
-    For r = 2 To 15
-        If InStr(CStr(ws.Cells(r, 10).Value), "派遣金額") > 0 Then
-            freeeDataDetectItemCol = 10
-            Exit Function
-        End If
-    Next r
+Function GetBasePay(ws As Worksheet, rowNum As Long) As Double
+    GetBasePay = ws.Cells(rowNum, 13).Value + ws.Cells(rowNum, 14).Value + _
+                 ws.Cells(rowNum, 15).Value + ws.Cells(rowNum, 16).Value + _
+                 ws.Cells(rowNum, 17).Value + ws.Cells(rowNum, 18).Value + _
+                 ws.Cells(rowNum, 19).Value + ws.Cells(rowNum, 20).Value + _
+                 ws.Cells(rowNum, 21).Value + ws.Cells(rowNum, 23).Value + _
+                 ws.Cells(rowNum, 24).Value + ws.Cells(rowNum, 25).Value + _
+                 ws.Cells(rowNum, 26).Value
 End Function

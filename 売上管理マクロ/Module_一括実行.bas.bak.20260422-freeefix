@@ -22,8 +22,6 @@ Public Sub 一括転記_その他()
 End Sub
 
 Public Sub 一括転記_全部()
-    Call freeeデータ転記
-    Call ホンダ交通費その他転記
     Call Tenki_Shubetsu("FS")
     Call Tenki_Shubetsu("SI")
     Call Tenki_Shubetsu("Honda")
@@ -31,15 +29,6 @@ Public Sub 一括転記_全部()
     Call Tenki_Shubetsu("Other")
 End Sub
 
-
-Public Sub 一括転記_freee売上()
-    On Error GoTo ErrHandle
-    Call freeeデータ転記
-    Call ホンダ交通費その他転記
-    Exit Sub
-ErrHandle:
-    MsgBox "freeeデータ転記で問題が発生しました: " & Err.Description, vbExclamation
-End Sub
 Private Sub Tenki_Shubetsu(fmtCode As String)
     Application.ScreenUpdating = False
     Application.DisplayAlerts = False

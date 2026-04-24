@@ -1259,7 +1259,7 @@ Public Sub freeeデータ転記()
         Dim wsCur As Worksheet
         For Each wsCur In wbTgt.Worksheets
             ' 受託/常註シートはスキップ
-            If InStr(wsCur.Name, "その他受託") > 0 Or InStr(wsCur.Name, "その他常註") > 0 Or InStr(wsCur.Name, "DELL委託人件費") > 0 Then GoTo NextCurSheet
+            If InStr(wsCur.Name, "その他受託") > 0 Or InStr(wsCur.Name, "その他常註") > 0 Then GoTo NextCurSheet
             If Not tgtWs Is Nothing Then
                 If wsCur.Name <> tgtWs.Name Then GoTo NextCurSheet
             End If
@@ -1345,24 +1345,23 @@ End Sub
 
 '------------------------------------------------
 ' Public Sub ホンダ交通費その他転記()
-'   操作画面から「交通費その他転記」対象の書き込み先を抽出して処理する。
-'   対象判定:
-'     - C列(WorkSheet)に値が入っている行 → そのシート1枚に書き込み
-'     - C列空 かつ B列に「ホンダ」を含む行 → そのブックの全シート（「まとめ」除く）
-'   jinjer源: 操作画面 F列="経費" の行の G列(パス)/H列(シート名)
-'   書き込み先の J(10)列="交通費" の行に、A列社員番号 → jinjer 93列(非課税通勤費)
-'   93列が0の場合は CQ(95) 列をフォールバック。当月列は G1 & "月" で1行目から検出。
+'   ホンダ業務ブックの各シートで 項目列(J=10)="交通費その他" の行を探し、
+'   その行のA列社員番号に対応する jinjer 93列(非課税通勤費)を書き込む。
+'   93列が0の場合は CQ(95) 列をフォールバック。
+'   対象月列: 操作画面G1 & "月"（例: "3月"）を1行目ヘッダーから検出。
 '------------------------------------------------
 Public Sub ホンダ交通費その他転記()
     Application.ScreenUpdating = False
     Application.DisplayAlerts = False
     Application.Calculation = xlCalculationManual
-    Application.StatusBar = "交通費その他転記 開始"
+    Application.StatusBar = "ホンダ交通費その他転記 開始"
 
     Dim wb1 As Workbook: Set wb1 = ThisWorkbook
     Dim ws1 As Worksheet
     Dim wbJ As Workbook
     Dim wbJOpened As Boolean: wbJOpened = False
+    Dim wbH As Workbook
+    Dim wbHOpened As Boolean: wbHOpened = False
 
     On Error Resume Next
     Set ws1 = wb1.Worksheets("操作画面")
@@ -1372,12 +1371,32 @@ Public Sub ホンダ交通費その他転記()
         GoTo CleanupHonda
     End If
 
+    ' ホンダブックパスを特定（操作画面B列に「ホンダ」を含む行）
+    Dim hondaPath As String: hondaPath = ""
+    Dim lastSet As Long
+    lastSet = ws1.Cells(ws1.Rows.Count, 2).End(xlUp).Row
+    Dim i As Long
+    For i = 3 To lastSet
+        Dim bp As String: bp = Trim(CStr(ws1.Cells(i, 2).Value))
+        If InStr(bp, "ホンダ") > 0 Then
+            hondaPath = bp
+            Exit For
+        End If
+    Next i
+    If hondaPath = "" Then
+        MsgBox "操作画面にホンダ業務のブックパスが設定されていません（B列）", vbExclamation
+        GoTo CleanupHonda
+    End If
+    If Dir(hondaPath) = "" Then
+        MsgBox "ホンダブックが存在しません:" & vbCrLf & hondaPath, vbExclamation
+        GoTo CleanupHonda
+    End If
+
     ' jinjer源を特定（操作画面F列=経費 の行のG列/H列）
     Dim jinPath As String: jinPath = ""
     Dim jinSheet As String: jinSheet = ""
     Dim lastH As Long
     lastH = ws1.Cells(ws1.Rows.Count, 8).End(xlUp).Row
-    Dim i As Long
     For i = 3 To lastH
         Dim fv As String: fv = Trim(CStr(ws1.Cells(i, 6).Value))
         If InStr(fv, "経費") > 0 Then
@@ -1430,88 +1449,81 @@ Public Sub ホンダ交通費その他転記()
         Dim aV As Variant: aV = wsJ.Cells(jr, 1).Value
         If IsNumeric(aV) And Trim(CStr(aV)) <> "" Then
             Dim eKey As String: eKey = CStr(CLng(aV))
-            Dim vVal As Double: vVal = 0
-            If IsNumeric(wsJ.Cells(jr, 93).Value) Then vVal = CDbl(wsJ.Cells(jr, 93).Value)
-            If vVal = 0 And IsNumeric(wsJ.Cells(jr, 95).Value) Then vVal = CDbl(wsJ.Cells(jr, 95).Value)
-            dictT(eKey) = vVal
+            Dim v As Double: v = 0
+            If IsNumeric(wsJ.Cells(jr, 93).Value) Then v = CDbl(wsJ.Cells(jr, 93).Value)
+            If v = 0 And IsNumeric(wsJ.Cells(jr, 95).Value) Then v = CDbl(wsJ.Cells(jr, 95).Value)
+            dictT(eKey) = v
         End If
     Next jr
+
+    ' ホンダブックを開く
+    For Each wbProbe In Workbooks
+        If StrComp(wbProbe.FullName, hondaPath, vbTextCompare) = 0 Then
+            Set wbH = wbProbe
+            Exit For
+        End If
+    Next wbProbe
+    If wbH Is Nothing Then
+        On Error Resume Next
+        Set wbH = Workbooks.Open(Filename:=hondaPath, UpdateLinks:=False)
+        On Error GoTo 0
+        If Not wbH Is Nothing Then wbHOpened = True
+    End If
+    If wbH Is Nothing Then
+        MsgBox "ホンダブックを開けませんでした:" & vbCrLf & hondaPath, vbExclamation
+        GoTo CleanupHonda
+    End If
 
     Dim tgtMonKey As String
     tgtMonKey = CStr(ws1.Range("G1").Value) & "月"
 
-    ' 操作画面を走査して対象ブック×シートを処理
-    Dim lastSet As Long
-    lastSet = ws1.Cells(ws1.Rows.Count, 2).End(xlUp).Row
-    Dim totalCnt As Long: totalCnt = 0
+    Dim writeCnt As Long: writeCnt = 0
     Dim sheetCnt As Long: sheetCnt = 0
-    Dim bookProcCnt As Long: bookProcCnt = 0
+    Dim wsH As Worksheet
+    For Each wsH In wbH.Worksheets
+        If InStr(wsH.Name, "まとめ") > 0 Then GoTo NextSheetH
 
-    For i = 3 To lastSet
-        Dim bookPath As String: bookPath = Trim(CStr(ws1.Cells(i, 2).Value))
-        Dim sheetName As String: sheetName = Trim(CStr(ws1.Cells(i, 3).Value))
-        If bookPath = "" Then GoTo NextSetupRow
-
-        Dim isTarget As Boolean: isTarget = False
-        If sheetName <> "" Then
-            isTarget = True  ' シート名指定ありは必ず対象
-        ElseIf InStr(bookPath, "ホンダ") > 0 Then
-            isTarget = True  ' ホンダブックはシート指定なくても対象
-        End If
-        If Not isTarget Then GoTo NextSetupRow
-
-        If Dir(bookPath) = "" Then
-            Debug.Print "書き込み先が存在しません(SKIP): " & bookPath
-            GoTo NextSetupRow
-        End If
-
-        ' 対象ブックを開く
-        Dim wbH As Workbook
-        Dim wbHOpened As Boolean: wbHOpened = False
-        Set wbH = Nothing
-        For Each wbProbe In Workbooks
-            If StrComp(wbProbe.FullName, bookPath, vbTextCompare) = 0 Then
-                Set wbH = wbProbe
+        ' 月列検出（1行目ヘッダー）
+        Dim tgtMonCol As Long: tgtMonCol = 0
+        Dim maxCH As Long
+        maxCH = wsH.Cells(1, wsH.Columns.Count).End(xlToLeft).Column
+        If maxCH < 1 Then maxCH = 1
+        Dim cc As Long
+        For cc = 1 To maxCH
+            If CStr(wsH.Cells(1, cc).Value) = tgtMonKey Then
+                tgtMonCol = cc
                 Exit For
             End If
-        Next wbProbe
-        If wbH Is Nothing Then
-            On Error Resume Next
-            Set wbH = Workbooks.Open(Filename:=bookPath, UpdateLinks:=False)
-            On Error GoTo 0
-            If Not wbH Is Nothing Then wbHOpened = True
-        End If
-        If wbH Is Nothing Then GoTo NextSetupRow
+        Next cc
+        If tgtMonCol = 0 Then GoTo NextSheetH
 
-        Application.StatusBar = "交通費その他転記: " & wbH.Name
-
-        ' 対象シート決定
-        Dim wsH As Worksheet
-        If sheetName <> "" Then
-            Dim wsHTarget As Worksheet
-            If TryGetSheetByNameLooseLocal(wbH, sheetName, wsHTarget) Then
-                Call HondaKotsuhiWriteSheet(wsHTarget, tgtMonKey, dictT, totalCnt, sheetCnt)
-            Else
-                Debug.Print "シート未検出(SKIP): " & bookPath & " / " & sheetName
+        ' 項目列=J(10) で「交通費その他」行を探す
+        Dim lastRH As Long
+        lastRH = wsH.Cells(wsH.Rows.Count, 10).End(xlUp).Row
+        Dim wr As Long
+        For wr = 2 To lastRH
+            If InStr(CStr(wsH.Cells(wr, 10).Value), "交通費その他") > 0 Then
+                Dim aCell As Variant: aCell = wsH.Cells(wr, 1).Value
+                If IsNumeric(aCell) And Trim(CStr(aCell)) <> "" Then
+                    Dim eK As String: eK = CStr(CLng(aCell))
+                    If dictT.Exists(eK) Then
+                        wsH.Cells(wr, tgtMonCol).Value = CDbl(dictT(eK))
+                        wsH.Cells(wr, tgtMonCol).Font.ColorIndex = 1
+                        writeCnt = writeCnt + 1
+                    End If
+                End If
             End If
-        Else
-            For Each wsH In wbH.Worksheets
-                If InStr(wsH.Name, "まとめ") > 0 Then GoTo NextSheetInLoop
-                Call HondaKotsuhiWriteSheet(wsH, tgtMonKey, dictT, totalCnt, sheetCnt)
-NextSheetInLoop:
-            Next wsH
-        End If
+        Next wr
+        sheetCnt = sheetCnt + 1
+NextSheetH:
+    Next wsH
 
-        wbH.Save
-        If wbHOpened Then wbH.Close SaveChanges:=False
-        bookProcCnt = bookProcCnt + 1
-NextSetupRow:
-    Next i
+    wbH.Save
+    If wbHOpened Then wbH.Close SaveChanges:=False
 
-    MsgBox "交通費その他転記 完了" & vbCrLf & _
-           "処理ブック数: " & bookProcCnt & vbCrLf & _
+    MsgBox "ホンダ交通費その他転記 完了" & vbCrLf & _
            "処理シート数: " & sheetCnt & vbCrLf & _
-           "書き込み件数: " & totalCnt & "件", vbInformation
+           "書き込み件数: " & writeCnt & "件", vbInformation
 
 CleanupHonda:
     If Not wbJ Is Nothing Then
@@ -1530,46 +1542,6 @@ CleanupHonda:
         If Not ws1 Is Nothing Then ws1.Activate
     End If
 End Sub
-
-Private Sub HondaKotsuhiWriteSheet(wsH As Worksheet, ByVal tgtMonKey As String, dictT As Object, ByRef totalCnt As Long, ByRef sheetCnt As Long)
-    If wsH Is Nothing Then Exit Sub
-
-    ' 月列検出
-    Dim tgtMonCol As Long: tgtMonCol = 0
-    Dim maxCH As Long
-    maxCH = wsH.Cells(1, wsH.Columns.Count).End(xlToLeft).Column
-    If maxCH < 1 Then maxCH = 1
-    Dim cc As Long
-    For cc = 1 To maxCH
-        If CStr(wsH.Cells(1, cc).Value) = tgtMonKey Then
-            tgtMonCol = cc
-            Exit For
-        End If
-    Next cc
-    If tgtMonCol = 0 Then Exit Sub
-
-    ' 項目列=J(10) で「交通費その他」行
-    Dim lastRH As Long
-    lastRH = wsH.Cells(wsH.Rows.Count, 10).End(xlUp).Row
-    Dim wr As Long
-    Dim writeCntLocal As Long: writeCntLocal = 0
-    For wr = 2 To lastRH
-        If InStr(CStr(wsH.Cells(wr, 10).Value), "交通費") > 0 Then
-            Dim aCell As Variant: aCell = wsH.Cells(wr, 1).Value
-            If IsNumeric(aCell) And Trim(CStr(aCell)) <> "" Then
-                Dim eK As String: eK = CStr(CLng(aCell))
-                If dictT.Exists(eK) Then
-                    wsH.Cells(wr, tgtMonCol).Value = CDbl(dictT(eK))
-                    wsH.Cells(wr, tgtMonCol).Font.ColorIndex = 1
-                    writeCntLocal = writeCntLocal + 1
-                End If
-            End If
-        End If
-    Next wr
-    totalCnt = totalCnt + writeCntLocal
-    sheetCnt = sheetCnt + 1
-End Sub
-
 Private Function freeeDataGetTargetYM(ws1 As Worksheet) As String
     Dim kv As String
     kv = Trim(CStr(ws1.Range("K1").Value))

@@ -113,15 +113,6 @@ Public Sub ”Ä—p“]‹L_Sub(bookPath As String, ws3 As Worksheet, ws3Kihon As Worksh
         T_mon = WorksheetFunction.Match(thisMonth, ws0.Rows(1), 0)
         On Error GoTo 0
         If T_mon = 0 Then GoTo NextSheet
-        ' Detect per-sheet layout: if "4" is at col 11 use Honda-style (J=item), else FS-style
-        Dim apr_col As Long: apr_col = 0
-        On Error Resume Next
-        apr_col = WorksheetFunction.Match("4ŒŽ", ws0.Rows(1), 0)
-        On Error GoTo 0
-        If apr_col > 0 Then
-            colMonStart = apr_col
-            colItem = apr_col - 1
-        End If
         Dim hasSouJuchuSheet As Boolean: hasSouJuchuSheet = SheetHasSouJuchu(ws0, colItem)
 
         Dim lastRow As Long

@@ -39,21 +39,6 @@ Public Function TryGetSheetByNameLoose(ByVal wb As Workbook, ByVal targetName As
     Next ws
 End Function
 
-Public Function SheetHasSouJuchu(ByVal ws As Worksheet, ByVal colItem As Long) As Boolean
-    If ws Is Nothing Then Exit Function
-    If colItem <= 0 Then Exit Function
-    Dim lastRow As Long
-    lastRow = ws.Cells(ws.Rows.Count, colItem).End(xlUp).Row
-    If lastRow < 2 Then Exit Function
-    Dim r As Long
-    For r = 2 To lastRow
-        If InStr(CStr(ws.Cells(r, colItem).Value), "‘Žó’‹àŠz") > 0 Then
-            SheetHasSouJuchu = True
-            Exit Function
-        End If
-    Next r
-End Function
-
 '------------------------------------------------
 ' Public Sub ˆêŠ‡“]‹L(bookPath, ws3, formatType, targetSheetName)
 ' formatType: "SI" / "Honda" / "UAL" / "Other"
@@ -113,16 +98,6 @@ Public Sub ”Ä—p“]‹L_Sub(bookPath As String, ws3 As Worksheet, ws3Kihon As Worksh
         T_mon = WorksheetFunction.Match(thisMonth, ws0.Rows(1), 0)
         On Error GoTo 0
         If T_mon = 0 Then GoTo NextSheet
-        ' Detect per-sheet layout: if "4" is at col 11 use Honda-style (J=item), else FS-style
-        Dim apr_col As Long: apr_col = 0
-        On Error Resume Next
-        apr_col = WorksheetFunction.Match("4ŒŽ", ws0.Rows(1), 0)
-        On Error GoTo 0
-        If apr_col > 0 Then
-            colMonStart = apr_col
-            colItem = apr_col - 1
-        End If
-        Dim hasSouJuchuSheet As Boolean: hasSouJuchuSheet = SheetHasSouJuchu(ws0, colItem)
 
         Dim lastRow As Long
         lastRow = ws0.Cells(ws0.Rows.Count, colItem).End(xlUp).Row
@@ -184,14 +159,10 @@ Public Sub ”Ä—p“]‹L_Sub(bookPath As String, ws3 As Worksheet, ws3Kihon As Worksh
                         ws0.Cells(ir, T_mon).Value = 0
                         If wRow > 0 Then ws0.Cells(ir, T_mon).Value = ws3.Cells(wRow, 71).Value
                     ElseIf iName = C_KOTSUHI Then
-                        If hasSouJuchuSheet Then
-                            ws0.Cells(ir, T_mon).Value = ""
-                        Else
-                            ws0.Cells(ir, T_mon).Value = 0
-                            If wRow > 0 Then
-                                ws0.Cells(ir, T_mon).Value = Round(ws3.Cells(wRow, 93).Value, 0)
-                                If ws0.Cells(ir, T_mon).Value = 0 Then ws0.Cells(ir, T_mon).Value = Round(ws3.Cells(wRow, 95).Value, 0)
-                            End If
+                        ws0.Cells(ir, T_mon).Value = 0
+                        If wRow > 0 Then
+                            ws0.Cells(ir, T_mon).Value = Round(ws3.Cells(wRow, 93).Value, 0)
+                            If ws0.Cells(ir, T_mon).Value = 0 Then ws0.Cells(ir, T_mon).Value = Round(ws3.Cells(wRow, 95).Value, 0)
                         End If
                     ElseIf iName = C_TSUKIN Then
                         ws0.Cells(ir, T_mon).Value = 0

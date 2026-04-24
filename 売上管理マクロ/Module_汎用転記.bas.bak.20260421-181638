@@ -11,6 +11,7 @@ Private Const C_KAIGO      As String = "介護保険"
 Private Const C_KOSE       As String = "厚生年金"
 Private Const C_ROSAI      As String = "労災保険"
 Private Const C_KOYO       As String = "雇用保険"
+Private Const C_URIAGE     As String = "売上高"
 
 Private Function NormalizeSheetNameKey(ByVal sheetName As String) As String
     Dim key As String
@@ -39,19 +40,137 @@ Public Function TryGetSheetByNameLoose(ByVal wb As Workbook, ByVal targetName As
     Next ws
 End Function
 
-Public Function SheetHasSouJuchu(ByVal ws As Worksheet, ByVal colItem As Long) As Boolean
-    If ws Is Nothing Then Exit Function
-    If colItem <= 0 Then Exit Function
-    Dim lastRow As Long
-    lastRow = ws.Cells(ws.Rows.Count, colItem).End(xlUp).Row
-    If lastRow < 2 Then Exit Function
-    Dim r As Long
-    For r = 2 To lastRow
-        If InStr(CStr(ws.Cells(r, colItem).Value), "総受注金額") > 0 Then
-            SheetHasSouJuchu = True
+Private Function ExtractMonthNumber_汎用転記(ByVal monthText As Variant) As Long
+    If IsDate(monthText) Then
+        ExtractMonthNumber_汎用転記 = Month(CDate(monthText))
+        Exit Function
+    End If
+
+    Dim txt As String
+    txt = Trim$(CStr(monthText))
+    txt = Replace$(txt, "　", "")
+    txt = Replace$(txt, " ", "")
+    txt = Replace$(txt, "月", "")
+    If txt = "" Then Exit Function
+
+    Dim parts() As String
+    If InStr(txt, "-") > 0 Then
+        parts = Split(txt, "-")
+        txt = parts(UBound(parts))
+    ElseIf InStr(txt, "/") > 0 Then
+        parts = Split(txt, "/")
+        txt = parts(UBound(parts))
+    ElseIf InStr(txt, ".") > 0 Then
+        parts = Split(txt, ".")
+        txt = parts(UBound(parts))
+    End If
+
+    If IsNumeric(txt) Then
+        ExtractMonthNumber_汎用転記 = CLng(Val(txt))
+        If ExtractMonthNumber_汎用転記 < 1 Or ExtractMonthNumber_汎用転記 > 12 Then
+            ExtractMonthNumber_汎用転記 = 0
+        End If
+    End If
+End Function
+
+Private Function TryParseYearMonthDate_汎用転記(ByVal monthText As Variant, ByRef ymDate As Date) As Boolean
+    If IsDate(monthText) Then
+        ymDate = DateSerial(Year(CDate(monthText)), Month(CDate(monthText)), 1)
+        TryParseYearMonthDate_汎用転記 = True
+        Exit Function
+    End If
+
+    Dim txt As String
+    txt = Trim$(CStr(monthText))
+    txt = Replace$(txt, "　", "")
+    txt = Replace$(txt, " ", "")
+    txt = Replace$(txt, "年", "-")
+    txt = Replace$(txt, "月", "")
+    txt = Replace$(txt, "/", "-")
+    txt = Replace$(txt, ".", "-")
+    If Len(txt) < 7 Then Exit Function
+
+    Dim yPart As String
+    Dim mPart As String
+    yPart = Left$(txt, 4)
+    mPart = Mid$(txt, 6, 2)
+    If Not (IsNumeric(yPart) And IsNumeric(mPart)) Then Exit Function
+
+    Dim y As Long
+    Dim m As Long
+    y = CLng(yPart)
+    m = CLng(mPart)
+    If y < 1900 Or m < 1 Or m > 12 Then Exit Function
+
+    ymDate = DateSerial(y, m, 1)
+    TryParseYearMonthDate_汎用転記 = True
+End Function
+
+Private Function FindSalesMonthColumn_汎用転記(ByVal wsSales As Worksheet, ByVal thisMonth As String) As Long
+    If wsSales Is Nothing Then Exit Function
+
+    Dim matchCol As Variant
+    matchCol = Application.Match(thisMonth, wsSales.Rows(2), 0)
+    If Not IsError(matchCol) Then
+        FindSalesMonthColumn_汎用転記 = CLng(matchCol)
+        Exit Function
+    End If
+
+    Dim targetMonth As Long
+    targetMonth = ExtractMonthNumber_汎用転記(thisMonth)
+    If targetMonth = 0 Then Exit Function
+
+    Dim lastCol As Long
+    lastCol = wsSales.Cells(2, wsSales.Columns.Count).End(xlToLeft).Column
+
+    Dim col As Long
+    Dim bestCol As Long
+    Dim candDate As Date
+    Dim bestDate As Date
+    For col = 1 To lastCol
+        If TryParseYearMonthDate_汎用転記(wsSales.Cells(2, col).Value, candDate) Then
+            If Month(candDate) = targetMonth Then
+                If bestCol = 0 Or candDate > bestDate Then
+                    bestCol = col
+                    bestDate = candDate
+                End If
+            End If
+        End If
+    Next col
+    If bestCol > 0 Then
+        FindSalesMonthColumn_汎用転記 = bestCol
+        Exit Function
+    End If
+
+    For col = 1 To lastCol
+        If ExtractMonthNumber_汎用転記(wsSales.Cells(2, col).Value) = targetMonth Then
+            FindSalesMonthColumn_汎用転記 = col
             Exit Function
         End If
-    Next r
+    Next col
+End Function
+
+Private Function GetDispatchAmount_汎用転記(ByVal wsSales As Worksheet, ByVal monthCol As Long, ByVal empNo As String) As Double
+    If wsSales Is Nothing Then Exit Function
+    If monthCol <= 0 Then Exit Function
+    empNo = Trim$(empNo)
+    If empNo = "" Then Exit Function
+
+    On Error Resume Next
+    GetDispatchAmount_汎用転記 = Application.WorksheetFunction.SumIfs( _
+        wsSales.Columns(monthCol), _
+        wsSales.Columns(1), C_URIAGE, _
+        wsSales.Columns(16), empNo)
+    If Err.Number <> 0 Then
+        Err.Clear
+        GetDispatchAmount_汎用転記 = Application.SumIfs( _
+            wsSales.Columns(monthCol), _
+            wsSales.Columns(1), C_URIAGE, _
+            wsSales.Columns(16), empNo)
+    End If
+    On Error GoTo 0
+
+    GetDispatchAmount_汎用転記 = Round(GetDispatchAmount_汎用転記 / 1.1, 0)
 End Function
 
 '------------------------------------------------
@@ -79,6 +198,34 @@ Public Sub 汎用転記_Sub(bookPath As String, ws3 As Worksheet, ws3Kihon As Worksh
 
     Dim thisMonth As String
     thisMonth = CStr(ws1.Range("G1").Value) & "月"
+
+    Dim wbSales As Workbook
+    Dim wsSales As Worksheet
+    Dim salesIsOpen As Boolean: salesIsOpen = False
+    Dim salesBookPath As String
+    Dim salesSheetName As String
+    Dim wbSalesChk As Workbook
+    salesBookPath = Trim$(CStr(ws1.Range("G3").Value))
+    salesSheetName = Trim$(CStr(ws1.Range("H3").Value))
+
+    If salesBookPath <> "" Then
+        For Each wbSalesChk In Workbooks
+            If wbSalesChk.FullName = salesBookPath Then
+                Set wbSales = wbSalesChk
+                salesIsOpen = True
+                Exit For
+            End If
+        Next wbSalesChk
+        If Not salesIsOpen Then
+            Set wbSales = Workbooks.Open(Filename:=salesBookPath, UpdateLinks:=False)
+        End If
+        If salesSheetName <> "" Then
+            Call TryGetSheetByNameLoose(wbSales, salesSheetName, wsSales)
+        End If
+    End If
+
+    Dim salesMonCol As Long
+    salesMonCol = FindSalesMonthColumn_汎用転記(wsSales, thisMonth)
 
     Dim wbTarget As Workbook
     Dim targetIsOpen As Boolean: targetIsOpen = False
@@ -113,16 +260,6 @@ Public Sub 汎用転記_Sub(bookPath As String, ws3 As Worksheet, ws3Kihon As Worksh
         T_mon = WorksheetFunction.Match(thisMonth, ws0.Rows(1), 0)
         On Error GoTo 0
         If T_mon = 0 Then GoTo NextSheet
-        ' Detect per-sheet layout: if "4" is at col 11 use Honda-style (J=item), else FS-style
-        Dim apr_col As Long: apr_col = 0
-        On Error Resume Next
-        apr_col = WorksheetFunction.Match("4月", ws0.Rows(1), 0)
-        On Error GoTo 0
-        If apr_col > 0 Then
-            colMonStart = apr_col
-            colItem = apr_col - 1
-        End If
-        Dim hasSouJuchuSheet As Boolean: hasSouJuchuSheet = SheetHasSouJuchu(ws0, colItem)
 
         Dim lastRow As Long
         lastRow = ws0.Cells(ws0.Rows.Count, colItem).End(xlUp).Row
@@ -180,11 +317,23 @@ Public Sub 汎用転記_Sub(bookPath As String, ws3 As Worksheet, ws3Kihon As Worksh
                         ElseIf wRow > 0 Then
                             ws0.Cells(ir, T_mon).Value = GetBasePay_汎用転記(ws3, wRow)
                         End If
+                    ElseIf iName = "総受注金額" Then
+                        If ws0.Name <> "UAL業務委託" Then
+                            Dim dispatchAmount As Double
+                            dispatchAmount = GetDispatchAmount_汎用転記(wsSales, salesMonCol, empVal)
+                            If dispatchAmount = 0 Then
+                                ws0.Cells(ir, T_mon).Value = ""
+                            Else
+                                ws0.Cells(ir, T_mon).Value = dispatchAmount
+                            End If
+                        Else
+                            ws0.Cells(ir, T_mon).Value = ""
+                        End If
                     ElseIf iName = C_KOKYAKU Or iName = C_KOKYAKU_TE Or iName = "On-call" Then
                         ws0.Cells(ir, T_mon).Value = 0
                         If wRow > 0 Then ws0.Cells(ir, T_mon).Value = ws3.Cells(wRow, 71).Value
                     ElseIf iName = C_KOTSUHI Then
-                        If hasSouJuchuSheet Then
+                        If Trim$(CStr(ws0.Cells(ir + 2, colItem).Value)) = "総受注金額" Then
                             ws0.Cells(ir, T_mon).Value = ""
                         Else
                             ws0.Cells(ir, T_mon).Value = 0
@@ -240,6 +389,9 @@ NextSheet:
 Finalize:
     wbTarget.Save
     If Not targetIsOpen Then wbTarget.Close SaveChanges:=False
+    If Not salesIsOpen Then
+        If Not wbSales Is Nothing Then wbSales.Close SaveChanges:=False
+    End If
 
     wb1.Activate
     ws1.Activate
