@@ -10,6 +10,9 @@ Public Sub Append_全部_一括処理()
     
     ' 2. e-staffing 取り込み
     Append_e_staffing_出力_to_経費統合一覧表
+
+    ' 2.5 SAP 経費 取り込み（e-staffing と並行）
+    Append_SAP経費_to_経費統合一覧表
     
     ' 3. 本社経費 取り込み（Freeeデータ）
     Append_本社経費_to_経費統合一覧表
@@ -18,7 +21,7 @@ Public Sub Append_全部_一括処理()
     AssignEmployeeNo_ByName_集計toJinjer False
     
     ' 5. 重複削除
-    RemoveDuplicates_A_D_F_AndLog
+    ' RemoveDuplicates_A_D_F_AndLog  ' disabled
     
     Dim elapsed As Double
     elapsed = Timer - startTime

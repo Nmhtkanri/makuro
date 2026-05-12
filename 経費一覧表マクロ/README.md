@@ -2,8 +2,11 @@
 
 ## 概要
 
-jinjer・e-staffing・Freee の 3つの経費管理システムからデータを取り込み、  
+jinjer・e-staffing・**SAP Fieldglass**・Freee の 4つの経費管理システムからデータを取り込み、  
 社内の「集計」シートへ一元集計したうえで、CSV出力やカラー勤務表への書き込みを行うマクロ群です。
+
+> **2026-05-01 変更履歴**: SAP Fieldglass 経費レポートからの取込ルートを **追加**（e-staffing と並行運用）。
+> 当初は e-staffing 廃止予定だったが、運用継続が必要なため両方並行する構成に変更。
 
 ---
 
@@ -12,9 +15,10 @@ jinjer・e-staffing・Freee の 3つの経費管理システムからデータ�
 ```
 ┌─────────── 入力層 ───────────┐
 │  jinjer CSV                  │
-│  e-staffing CSV/Excel        │──→「経費一覧表」シートに統合
-│  Freee 本決算経費            │      ↓
-└──────────────────────────────┘   社員ID照合 → 重複削除
+│  e-staffing CSV/Excel        │──→「経費統合一覧表」シートに統合
+│  SAP Fieldglass 経費 CSV     │      ↓
+│  Freee 本社経費              │   社員ID照合 → 重複削除
+└──────────────────────────────┘
                                       ↓
 ┌─────────── 集計層 ───────────┐
 │  c設定.bas                   │──→ キーワード照合・カテゴリ集計
@@ -47,16 +51,17 @@ jinjer・e-staffing・Freee の 3つの経費管理システムからデータ�
 
 | ファイル | 主要プロシージャ | 役割 |
 |---------|----------------|------|
-| **E一覧表作成マクロ.bas** | `Append_経費統合一覧_to_経費一覧表()` | jinjer+Freee統合データを「経費一覧表」へ追記 |
-| | `Append_e_staffing_経費_to_経費一覧表()` | e-staffingデータを取込 |
-| | `Append_jinjer_CSV_to_経費一覧表()` | jinjer CSVを直接取込 |
-| | `Append_Freee_to_経費一覧表()` | Freeeデータを取込 |
-| | `AssignEmployeeNo_ByName_じんじてJinjer()` | 名前から社員番号を照合・付与 |
+| **E一覧表作成マクロ.bas** | `Append_交通費一覧_to_経費統合一覧表()` | jinjer+Freee統合データを「経費統合一覧表」へ追記 |
+| | `Append_jinjer_CSV_to_経費統合一覧表()` | jinjer CSVを直接取込 |
+| | `Append_Freee_to_経費統合一覧表()` | Freeeデータを取込 |
+| | `AssignEmployeeNo_ByName_集計toJinjer()` | 名前から社員番号を照合・付与 |
 | | `RemoveDuplicates_A_D_F_AndLog()` | A/D/F列ベースで重複行を削除 |
-| **b経費統合一覧表の取り込みマクロ.bas** | `Append_本決算経費_to_経費一覧表()` | Freee本決算経費シートからの取込 |
+| **b経費統合一覧表の取り込みマクロ.bas** | `Append_本社経費_to_経費統合一覧表()` | Freee本社経費シートからの取込 |
+| **hSAP経費貼り付けマクロ.bas** | `Paste_SAP経費_From_File()` | SAP Fieldglass 経費 CSV (UTF-8 BOM) を `SAP_経費` シートに貼付 |
+| **hSAP経費取り込みマクロ.bas** | `Append_SAP経費_to_経費統合一覧表()` | `SAP_経費` → 経費統合一覧表 への34列マッピング。姓+名/名+姓 両方で社員番号紐付け |
 | **jinjer経費貼り付けマクロ.bas** | — | jinjer CSVをシートに貼り付け |
-| **estaffing貼り付けマクロ.bas** | — | e-staffing CSV/Excelをシートに貼り付け |
-| **estaffing整形マクロ.bas** | `Export_EStaffing_SelectedColumns()` | e-staffingデータの列整形 |
+| **estaffing貼り付けマクロ.bas** | — | e-staffing CSV/Excel をシートに貼り付け（運用継続） |
+| **estaffing整形マクロ.bas** | `Export_EStaffing_SelectedColumns()` | e-staffing データの列整形 |
 | **GFREE整形マクロ.bas** | `Freee〜削除〜名前の変換〜最終済()` | Freeeデータの整形（ヘッダー保持、列削減、重複排除） |
 
 ### 集計層
@@ -128,17 +133,20 @@ jinjer・e-staffing・Freee の 3つの経費管理システムからデータ�
 
 | シート名 | 用途 |
 |---------|------|
-| 経費一覧表 | 3ソース統合後の全経費データ（34列） |
+| 経費統合一覧表 | 3ソース統合後の全経費データ（34列） |
 | 集計 | 社員別に集計した結果 |
 | 設定 | c設定.bas が使うキーワード定義 |
 | 集計ログ | 集計処理のトレースログ |
-| 経費統合一覧 | jinjer+Freee 統合済みデータ |
-| e-staffing_経費 | e-staffing 貼り付け先 |
-| 本決算経費 | Freee本決算データ |
-| Freee | Freee経費データ |
+| 交通費・区間 | jinjer 交通費取込元 |
+| 交通費申請_*** | jinjer 交通費申請の月次データ |
+| 経費申請_*** | jinjer 経費申請の月次データ |
+| **SAP_経費** | **SAP Fieldglass 経費 CSV の貼付先（12列固定ヘッダー）** |
+| e-staffing_出力 | e-staffing データの貼付先（運用継続） |
+| 立替精算一覧 | 勤怠報告書由来の立替精算データ |
+| 本社経費 | Freee 経費データ |
 | 仕訳データ | 仕訳データ（通信手当等の配分元） |
-| PathList | カラー勤務表のファイルパス一覧 |
-| Skip | カラー勤務表書込のスキップ対象 |
+| PathList / パスリスト | カラー勤務表のファイルパス一覧 |
+| スキップ | カラー勤務表書込のスキップ対象 |
 
 ---
 
@@ -146,12 +154,28 @@ jinjer・e-staffing・Freee の 3つの経費管理システムからデータ�
 
 ### 一括実行（通常フロー）
 
-1. jinjer / e-staffing / Freee の各データをシートに貼り付ける
-2. **`Append_全て_統合処理()`** を実行（a一連の処理.bas）
-3. **`Run_経費集計_設定シート対応()`** を実行（c設定.bas）
-4. **`Distribute_To_RY_Columns()`** を実行（dRY列振り分けマクロ.bas）
-5. 必要に応じて `仕訳データ蓖振分け_RS_TU()` / `Merge_Q_To_XY()` を実行
-6. **`経費一覧CSV作成()`** でCSV出力、または **`ProcessPathList()`** で勤務表書込
+1. **jinjer 交通費 CSV** を「交通費・区間」または交通費申請シートに貼り付ける
+2. **e-staffing CSV/Excel** を `e-staffing_出力` シートに貼り付ける（estaffing貼り付けマクロ → estaffing整形マクロ）
+3. **SAP 経費 CSV** を `Paste_SAP経費_From_File()` で `SAP_経費` シートに取込（または手貼り）
+4. **Freee 経費** を「本社経費」シートに整形して貼り付ける（GFREE整形マクロ）
+5. **`Append_全て_一括処理()`** を実行（a一連の処理.bas）  
+   → 交通費 → e-staffing → SAP 経費 → 本社経費 → 社員番号付与 → 重複削除 まで自動
+5. **`Run_経費集計_設定シート対応()`** を実行（c設定.bas）
+6. **`Distribute_To_RY_Columns()`** を実行（dRY列振り分けマクロ.bas）
+7. 必要に応じて `仕訳データ蓖振分け_RS_TU()` / `Merge_Q_To_XY()` を実行
+8. **`経費一覧CSV作成()`** でCSV出力、または **`ProcessPathList()`** で勤務表書込
+
+### SAP Fieldglass レポート設定（毎月の運用）
+
+レポート名: `経費月次出力_API連携用`
+
+- **基本モジュール**: 費用シート
+- **列**（12項目）: 姓 / 名 / 費用合計 / 費用エントリ日 / 説明 / 費用シート承認日 / 事業単位 / コストセンター / 通貨 / 費用シート ID / 勤務地 / 費用シートのステータス
+- **フィルタ**:
+  - 費用シート承認日 = 範囲内（対象月の月初〜翌月初）
+  - ステータスフィルタは **指定しない**（「請求済み」のレコードも取込対象なため）
+- **出力形式**: CSV（UTF-8 BOM）
+- **注意**: 「費用シート提出者」は列に**入れない**（同一経費が代行提出者違いで重複出力されるため）
 
 ### 個別実行
 
@@ -171,10 +195,12 @@ jinjer・e-staffing・Freee の 3つの経費管理システムからデータ�
 ├── E一覧表作成マクロ.bas        ← データ統合・取込の中心
 ├── Fカラー勤務表へ書き込み.bas  ← 勤務表出力
 ├── GFREE整形マクロ.bas          ← Freeeデータ整形
+├── hSAP経費貼り付けマクロ.bas   ← SAP CSV を SAP_経費 シートに取込
+├── hSAP経費取り込みマクロ.bas   ← SAP_経費 → 経費統合一覧表 への34列マッピング
 ├── I追加金額マクロ.bas          ← Q→X/Y列マージ
 ├── Aパスリストから開くマクロ.bas ← ファイルオープン補助
-├── estaffing整形マクロ.bas      ← e-staffing整形
-├── estaffing貼り付けマクロ.bas  ← e-staffing貼り付け
+├── estaffing貼り付けマクロ.bas  ← e-staffing 貼り付け
+├── estaffing整形マクロ.bas      ← e-staffing 整形
 ├── jinjer経費貼り付けマクロ.bas ← jinjer貼り付け
 ├── 仕訳データ振り分けマクロ.bas ← 通信手当等の配分
 ├── Module1.bas                  ← 旧版（参考保存）
@@ -183,6 +209,11 @@ jinjer・e-staffing・Freee の 3つの経費管理システムからデータ�
 └── 使わないけどバックデータ用マクロ/
     └── d集計シート.bas           ← c設定.basの旧版バックアップ
 ```
+
+## Y: ドライブ側にも展開済み
+
+`Y:\給与計算関連\経費利用履歴 Rev4 - コピー.xlsm` にも同じ SAP 取込ルートを追加済み。
+モジュール名は環境差で `E一覧表作成マクロ1` (末尾「1」) になっている点だけ注意。
 
 ---
 

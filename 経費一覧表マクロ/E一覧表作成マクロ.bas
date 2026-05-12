@@ -88,10 +88,12 @@ Attribute VB_Name = "E一覧表作成マクロ"
                 out(r, 20) = sR
             End If
             ' AH(34): Q(17) -> if contains customer billing, set D amount
+            out(r, 10) = v(r, 17)
             qVal = ""
-            If Not IsEmpty(v(r, 17)) Then qVal = CStr(v(r, 17))
+            If Not IsEmpty(out(r, 10)) Then qVal = CStr(out(r, 10))
             If InStr(1, qVal, "顧客請求分", vbTextCompare) > 0 Then
                 out(r, 34) = v(r, 4)
+                out(r, 4) = ""
             End If
         Next r
 
@@ -671,8 +673,11 @@ Public Sub Append_全部_Freee含む_一括処理()
     ' 2. 立替精算一覧 取り込み
     Append_立替精算一覧_to_経費統合一覧表
     
-    ' 3. e-staffing 取り込み
+    ' 2. e-staffing 取り込み
     Append_e_staffing_出力_to_経費統合一覧表
+
+    ' 2.5 SAP 経費 取り込み（e-staffing と並行）
+    Append_SAP経費_to_経費統合一覧表
     
     ' 3.5 jinjer CSV 取り込み
     Append_jinjer_CSV_to_経費統合一覧表
@@ -682,7 +687,7 @@ Public Sub Append_全部_Freee含む_一括処理()
     AssignEmployeeNo_ByName_集計toJinjer False
     
     ' 5. 重複削除
-    RemoveDuplicates_A_D_F_AndLog
+    ' RemoveDuplicates_A_D_F_AndLog  ' disabled
     
     MsgBox "全ての処理が完了しました！", vbInformation
 End Sub
@@ -992,7 +997,9 @@ Public Sub Append_jinjer_CSV_to_経費統合一覧表()
     Dim c As Long, hdr As String
     For c = 1 To csvLastCol
         hdr = Trim$(CStr(wsCSV.Cells(1, c).value))
-        If hdr <> "" Then csvHeaders.Add hdr, c
+        If hdr <> "" Then
+            If Not csvHeaders.Exists(hdr) Then csvHeaders.Add hdr, c
+        End If
     Next c
 
     ' 6. 経費統合一覧表ヘッダー読み込み
@@ -1050,6 +1057,7 @@ Public Sub Append_jinjer_CSV_to_経費統合一覧表()
         For Each dstCol In colMap.Keys
             wsDst.Cells(wr, CLng(dstCol)).value = wsCSV.Cells(r, colMap(dstCol)).value
         Next dstCol
+        MoveJinjerCustomerBillToAH wsDst, wr, dstHeaders
         wr = wr + 1
 NextCSVRow:
     Next r
@@ -1073,3 +1081,87 @@ ErrHandler:
     MsgBox "jinjer CSV 取り込みエラー：" & Err.Number & vbCrLf & Err.Description, vbExclamation
     Resume FinallyExit
 End Sub
+
+' ============================================================
+'  jinjer顧客請求行の金額を AH列のみに寄せる
+'  - 請求区分が「顧客請求」
+'  - 夜間当番/顧客対応当番系は対象外
+'  - D/M/N/P と AH の二重計上を避ける
+' ============================================================
+Private Sub MoveJinjerCustomerBillToAH(ByVal ws As Worksheet, _
+                                       ByVal rowNum As Long, _
+                                       ByVal dstHeaders As Object)
+    Dim cBillType As Long, cDetail As Long, cMemoReq As Long, cExpenseType As Long
+    Dim cMemoLine As Long, cTotal As Long, cSubTotal As Long, cFare As Long
+    Dim cAmount As Long, cCustomerBill As Long
+
+    cBillType = HeaderColOrDefault(dstHeaders, "請求区分", 10)
+    cDetail = HeaderColOrDefault(dstHeaders, "内訳", 8)
+    cMemoReq = HeaderColOrDefault(dstHeaders, "備考(申請書)", 5)
+    cExpenseType = HeaderColOrDefault(dstHeaders, "費用種別", 11)
+    cMemoLine = HeaderColOrDefault(dstHeaders, "備考(明細)", 20)
+    cTotal = HeaderColOrDefault(dstHeaders, "合計", 4)
+    cSubTotal = HeaderColOrDefault(dstHeaders, "小計", 13)
+    cFare = HeaderColOrDefault(dstHeaders, "金額(交通費)", 14)
+    cAmount = HeaderColOrDefault(dstHeaders, "金額", 16)
+    cCustomerBill = HeaderColOrDefault(dstHeaders, "顧客請求費", 34)
+
+    If Trim$(CStr(ws.Cells(rowNum, cBillType).value)) <> "顧客請求" Then Exit Sub
+
+    Dim judgeText As String
+    judgeText = CStr(ws.Cells(rowNum, cDetail).value) & " " & _
+                CStr(ws.Cells(rowNum, cMemoReq).value) & " " & _
+                CStr(ws.Cells(rowNum, cExpenseType).value) & " " & _
+                CStr(ws.Cells(rowNum, cMemoLine).value)
+    If IsJinjerNightDutyText(judgeText) Then Exit Sub
+
+    Dim billAmt As Variant
+    billAmt = FirstNonEmptyCellValue(ws, rowNum, Array(cTotal, cAmount, cSubTotal, cFare))
+    If Trim$(CStr(billAmt)) = "" Then Exit Sub
+
+    ws.Cells(rowNum, cCustomerBill).value = billAmt
+    ws.Cells(rowNum, cTotal).ClearContents
+    ws.Cells(rowNum, cSubTotal).ClearContents
+    ws.Cells(rowNum, cFare).ClearContents
+    ws.Cells(rowNum, cAmount).ClearContents
+End Sub
+
+Private Function HeaderColOrDefault(ByVal headers As Object, _
+                                    ByVal headerName As String, _
+                                    ByVal defaultCol As Long) As Long
+    If Not headers Is Nothing Then
+        If headers.Exists(headerName) Then
+            HeaderColOrDefault = CLng(headers(headerName))
+            Exit Function
+        End If
+    End If
+    HeaderColOrDefault = defaultCol
+End Function
+
+Private Function FirstNonEmptyCellValue(ByVal ws As Worksheet, _
+                                        ByVal rowNum As Long, _
+                                        ByVal cols As Variant) As Variant
+    Dim i As Long, v As Variant
+    For i = LBound(cols) To UBound(cols)
+        v = ws.Cells(rowNum, CLng(cols(i))).value
+        If Trim$(CStr(v)) <> "" Then
+            FirstNonEmptyCellValue = v
+            Exit Function
+        End If
+    Next i
+    FirstNonEmptyCellValue = ""
+End Function
+
+Private Function IsJinjerNightDutyText(ByVal textValue As String) As Boolean
+    Dim keys As Variant
+    keys = Array("夜間当番", "24時間準直当番", "準直当番", "深夜出動", _
+                 "顧客当番", "顧客対応当番", "オンコール")
+
+    Dim i As Long
+    For i = LBound(keys) To UBound(keys)
+        If InStr(1, textValue, CStr(keys(i)), vbTextCompare) > 0 Then
+            IsJinjerNightDutyText = True
+            Exit Function
+        End If
+    Next i
+End Function
