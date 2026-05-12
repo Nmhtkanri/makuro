@@ -289,6 +289,12 @@ Private Function Collect_From_Source(ByRef agg As Object, ByRef maxDate As Objec
         End If
         
         If amt <> 0 Then
+            If estFilled And HitAnyCollection(desc, kwYakan) = "" Then
+                AddLog r, empNo, empNm, ws.Cells(r, cUch).value, amt, _
+                       "D:顧客請求費ありのため除外", "AH優先（二重計上防止）"
+                GoTo NextR
+            End If
+
             If Not agg.Exists(key) Then agg.Add key, Array(0#, 0#, 0#, 0#, 0#, 0#, 0#)
             Dim bucket: bucket = agg(key)
             
