@@ -168,13 +168,7 @@ Private Function NumText(ByVal v As Double) As String
     If v = 0 Then
         NumText = "0"
     Else
-        Dim s As String
-        s = Format$(v, "0.########")
-        Do While InStr(1, s, ".", vbBinaryCompare) > 0 And Right$(s, 1) = "0"
-            s = Left$(s, Len(s) - 1)
-        Loop
-        If Right$(s, 1) = "." Then s = Left$(s, Len(s) - 1)
-        NumText = s
+        NumText = Format$(v, "0.########")
     End If
 End Function
 
