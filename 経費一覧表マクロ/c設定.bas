@@ -35,6 +35,8 @@ Private Const CAT_YAKAN As String = "夜間当番手当"
 Private Const CAT_RINK As String = "RINK手当"
 Private Const CAT_TRANS As String = "交通費"
 Private Const CAT_TW As String = "テレワーク手当"
+Private Const CAT_NONTAX_TATEKAE As String = "非課税精算(立替金)"
+Private Const CAT_ETC As String = "その他(会議費・消耗品など)"
 Private Const CAT_TRANS_NG As String = "交通費除外"
 Private Const CAT_KOKYAKU_NG As String = "顧客請求除外"
 
@@ -43,6 +45,8 @@ Private kwYakan As Collection
 Private kwRink As Collection
 Private kwTrans As Collection
 Private kwTW As Collection
+Private kwNontaxTatekae As Collection
+Private kwEtc As Collection
 Private kwTransNG As Collection
 Private kwKokyakuNG As Collection
 
@@ -121,6 +125,8 @@ Private Function LoadKeywordsFromSetting() As Boolean
     Set kwRink = New Collection
     Set kwTrans = New Collection
     Set kwTW = New Collection
+    Set kwNontaxTatekae = New Collection
+    Set kwEtc = New Collection
     Set kwTransNG = New Collection
     Set kwKokyakuNG = New Collection
     
@@ -147,6 +153,10 @@ Private Function LoadKeywordsFromSetting() As Boolean
                     kwTrans.Add LCase$(keyword)
                 Case CAT_TW
                     kwTW.Add LCase$(keyword)
+                Case CAT_NONTAX_TATEKAE
+                    kwNontaxTatekae.Add LCase$(keyword)
+                Case CAT_ETC
+                    kwEtc.Add LCase$(keyword)
                 Case CAT_TRANS_NG
                     kwTransNG.Add LCase$(keyword)
                 Case CAT_KOKYAKU_NG
@@ -219,6 +229,7 @@ Private Function Collect_From_Source(ByRef agg As Object, ByRef maxDate As Objec
     ' 列を探す
     Dim cEmpNo As Long, cName As Long, cUch As Long, cTrans As Long
     Dim cAmt As Long, cFareAmt As Long, cBooked As Long, cEStaff As Long
+    Dim cBillType As Long, cExpenseType As Long, cMemoReq As Long, cMemoLine As Long, cSourceMark As Long
     
     cEmpNo = FindCol(ws, 1, Array("社員番号", "従業員番号", "社員ID"))
     cName = FindCol(ws, 1, Array("氏名", "名前"))
@@ -227,6 +238,11 @@ Private Function Collect_From_Source(ByRef agg As Object, ByRef maxDate As Objec
     cAmt = FindCol(ws, 1, Array("合計", "小計", "金額"))
     cFareAmt = FindCol(ws, 1, Array("金額(交通費)", "交通費金額", "交通費（円）", "交通費(円)"), True)
     cBooked = FindCol(ws, 1, Array("計上日", "計上", "計上日付"), True)
+    cBillType = FindCol(ws, 1, Array("請求区分"), True)
+    cExpenseType = FindCol(ws, 1, Array("費用種別"), True)
+    cMemoReq = FindCol(ws, 1, Array("備考(申請書データ)", "備考(申請書)", "備考"), True)
+    cMemoLine = FindCol(ws, 1, Array("備考(明細)", "備考（明細）"), True)
+    cSourceMark = FindCol(ws, 1, Array("仕訳区分", "取込区分", "データ種別"), True)
     cEStaff = FindCol(ws, 1, Array("顧客請求費", "顧客対応", "顧客当番", "夜間当番", "24時間準直当番", "深夜出動", "24時間準直当番手当", "糊客請求分"), True)
     If cEStaff = 0 Then cEStaff = 34 ' S列フォールバック
     
@@ -246,7 +262,8 @@ Private Function Collect_From_Source(ByRef agg As Object, ByRef maxDate As Objec
     
     For r = 2 To lastR
         Dim empNo As String, empNm As String, key As String
-        Dim desc As String, trans As String
+        Dim desc As String, trans As String, billType As String, expenseType As String
+        Dim memoReq As String, memoLine As String, sourceMark As String, judgeText As String
         Dim amt As Double, fa As Double, estAmt As Double
         Dim estFilled As Boolean
         Dim matchedKw As String, resultCat As String
@@ -259,7 +276,19 @@ Private Function Collect_From_Source(ByRef agg As Object, ByRef maxDate As Objec
         If Not empList.Exists(key) Then empList.Add key, Array(empNo, empNm)
         
         desc = NormalizeStr(ws.Cells(r, cUch).value)
-        trans = IIf(cTrans > 0, NormalizeStr(ws.Cells(r, cTrans).value), "")
+        trans = ""
+        billType = ""
+        expenseType = ""
+        memoReq = ""
+        memoLine = ""
+        sourceMark = ""
+        If cTrans > 0 Then trans = NormalizeStr(ws.Cells(r, cTrans).value)
+        If cBillType > 0 Then billType = NormalizeStr(ws.Cells(r, cBillType).value)
+        If cExpenseType > 0 Then expenseType = NormalizeStr(ws.Cells(r, cExpenseType).value)
+        If cMemoReq > 0 Then memoReq = NormalizeStr(ws.Cells(r, cMemoReq).value)
+        If cMemoLine > 0 Then memoLine = NormalizeStr(ws.Cells(r, cMemoLine).value)
+        If cSourceMark > 0 Then sourceMark = NormalizeStr(ws.Cells(r, cSourceMark).value)
+        judgeText = desc & " " & trans & " " & billType & " " & expenseType & " " & memoReq & " " & memoLine & " " & sourceMark
         estFilled = (cEStaff > 0 And Trim$(CStr(ws.Cells(r, cEStaff).value)) <> "")
         
         ' --- G列：顧客請求費（除外キーワードチェック）---
@@ -297,6 +326,14 @@ Private Function Collect_From_Source(ByRef agg As Object, ByRef maxDate As Objec
 
             If Not agg.Exists(key) Then agg.Add key, Array(0#, 0#, 0#, 0#, 0#, 0#, 0#)
             Dim bucket: bucket = agg(key)
+
+            ' 0. 本社経費は全て非課税精算(立替金)
+            If InStr(1, sourceMark, "本社経費", vbTextCompare) > 0 Then
+                bucket(6) = bucket(6) + amt
+                resultCat = "I:非課税精算"
+                matchedKw = "本社経費"
+                GoTo Decided
+            End If
             
             ' キーワード判定（優先順位順）
             resultCat = ""
@@ -327,7 +364,8 @@ Private Function Collect_From_Source(ByRef agg As Object, ByRef maxDate As Objec
             End If
             
             ' 4. 非課税精算(立替金)
-            If cTrans > 0 And InStr(1, trans, "交通費", vbTextCompare) > 0 Then
+            matchedKw = HitAnyCollection(judgeText, kwNontaxTatekae)
+            If matchedKw <> "" Then
                 If Not estFilled Then bucket(6) = bucket(6) + amt
                 resultCat = "I:非課税精算"
                 GoTo Decided
@@ -344,15 +382,23 @@ Private Function Collect_From_Source(ByRef agg As Object, ByRef maxDate As Objec
                     resultCat = "H:交通費"
                 Else
                     If Not estFilled Then bucket(3) = bucket(3) + amt
-                    resultCat = "I:その他（交通費NG: " & ngKw & "）"
+                    resultCat = "J:その他（交通費NG: " & ngKw & "）"
                     matchedKw = matchedKw & " → NG:" & ngKw
                 End If
                 GoTo Decided
             End If
+
+            ' 6. その他(会議費・消耗品など)
+            matchedKw = HitAnyCollection(judgeText, kwEtc)
+            If matchedKw <> "" Then
+                bucket(3) = bucket(3) + amt
+                resultCat = "J:その他"
+                GoTo Decided
+            End If
             
-            ' 6. その他（どのキーワードにもマッチしない場合は無条件で計上）
+            ' 7. その他（どのキーワードにもマッチしない場合は無条件で計上）
             bucket(3) = bucket(3) + amt
-            resultCat = "I:その他"
+            resultCat = "J:その他"
             matchedKw = "(該当キーワードなし)"
             
 Decided:
@@ -402,7 +448,7 @@ Private Sub Rewrite_Output(ByVal agg As Object, ByVal maxDate As Object)
     Dim dateById As Object: Set dateById = CreateObject("Scripting.Dictionary")
     Dim k, id As String, arr
     
-    For Each k In agg.Keys
+    For Each k In agg.keys
         id = ParseEmpNo(CStr(k))
         If id <> "" Then
             arr = agg(k)
@@ -415,7 +461,7 @@ Private Sub Rewrite_Output(ByVal agg As Object, ByVal maxDate As Object)
         End If
     Next k
     
-    For Each k In maxDate.Keys
+    For Each k In maxDate.keys
         id = ParseEmpNo(CStr(k))
         If id <> "" Then
             Dim dmax As Double: dmax = maxDate(k)
@@ -676,6 +722,35 @@ Public Sub Setup_設定シート作成()
     r = AddRow(ws, r, CAT_TRANS, "宿泊")
     r = AddRow(ws, r, CAT_TRANS, "ホテル")
     r = AddRow(ws, r, CAT_TRANS, "北総鉄道北総線")
+    
+    ' --- 非課税精算(立替金) ---
+    r = AddRow(ws, r, CAT_NONTAX_TATEKAE, "交通費（電車・バス）")
+    r = AddRow(ws, r, CAT_NONTAX_TATEKAE, "交通費（特急・新幹線）")
+    r = AddRow(ws, r, CAT_NONTAX_TATEKAE, "交通費（タクシー）")
+    r = AddRow(ws, r, CAT_NONTAX_TATEKAE, "交通費（航空機）")
+    r = AddRow(ws, r, CAT_NONTAX_TATEKAE, "旅費")
+    r = AddRow(ws, r, CAT_NONTAX_TATEKAE, "出張")
+    r = AddRow(ws, r, CAT_NONTAX_TATEKAE, "宿泊")
+    r = AddRow(ws, r, CAT_NONTAX_TATEKAE, "ホテル")
+    r = AddRow(ws, r, CAT_NONTAX_TATEKAE, "日当")
+    r = AddRow(ws, r, CAT_NONTAX_TATEKAE, "交通費（船舶）")
+    
+    ' --- その他(会議費・消耗品など) ---
+    r = AddRow(ws, r, CAT_ETC, "会議接待費")
+    r = AddRow(ws, r, CAT_ETC, "会議交際費")
+    r = AddRow(ws, r, CAT_ETC, "会議費")
+    r = AddRow(ws, r, CAT_ETC, "交際費")
+    r = AddRow(ws, r, CAT_ETC, "接待")
+    r = AddRow(ws, r, CAT_ETC, "飲食")
+    r = AddRow(ws, r, CAT_ETC, "懇親")
+    r = AddRow(ws, r, CAT_ETC, "手土産")
+    r = AddRow(ws, r, CAT_ETC, "福利厚生")
+    r = AddRow(ws, r, CAT_ETC, "消耗品")
+    r = AddRow(ws, r, CAT_ETC, "消耗品費")
+    r = AddRow(ws, r, CAT_ETC, "備品")
+    r = AddRow(ws, r, CAT_ETC, "事務用品")
+    r = AddRow(ws, r, CAT_ETC, "その他経費")
+    r = AddRow(ws, r, CAT_ETC, "その他")
     
     ' --- 交通費除外（NGワード）---
     r = AddRow(ws, r, CAT_TRANS_NG, "会議")

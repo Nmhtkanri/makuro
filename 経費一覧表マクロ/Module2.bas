@@ -12,28 +12,23 @@ Sub 経費インポートCSV作成()
     '  A: 社員番号      ← A列
     '  B: 氏名          ← B列
     '  C: 夜間当番手当  ← F列（手当2＝夜間＋RINK）
-    '  D: 営業手当      ← 0
-    '  E: 現場管理費    ← 0
-    '  F: テレワーク手当 ← J列
-    '  G: 定常外業務対応手当 ← 空欄（手入力用）
-    '  H: 家賃手当      ← 0
-    '  I: その他手当    ← 0
-    '  J: 過不足調整    ← 0
-    '  K: 課税通勤費    ← 0
-    '  L: 非課税通勤費  ← H列（交通費）※立替金ありの人は0
-    '  M: 立替金(顧客請求分) ← G列
-    '  N: 立替金        ← X列（V+X+Y合算済み）※立替金ありの人のみ
-    '  O: その他        ← I列 ※立替金ありの人は0
+    '  D: 定常外業務対応手当 ← 空欄（手入力用）
+    '  E: 過不足調整    ← 0
+    '  F: 課税通勤費    ← 0
+    '  G: 非課税通勤費  ← H列（交通費）※立替金ありの人は0
+    '  H: 立替金(顧客請求分) ← G列
+    '  I: 立替金        ← X列（非課税精算・立替金）※立替金ありの人のみ
+    '  J: その他        ← Y列（非課税精算・その他）。Y列が空ならJ列
     '
     ' 【立替金の判定】
     '  X列（非課税精算・立替金）に値がある場合：
     '    → N列にX列の値を入れる
     '    → L列（非課税通勤費）を0にする
-    '    → O列（その他）を0にする
+    '    → J列（その他）はY列（非課税精算・その他）を入れる
     '  X列が0または空欄の場合：
     '    → N列は0
     '    → L列にH列（交通費）を入れる
-    '    → O列にI列（その他）を入れる
+    '    → J列（その他）はY列（空ならJ列）を入れる
     '=============================================================
 
     Dim wsSource As Worksheet
@@ -71,8 +66,7 @@ Sub 経費インポートCSV作成()
     Open csvPath For Output As #fileNum
     
     '--- ヘッダー行を書き込み ---
-    Print #fileNum, "社員番号,氏名,夜間当番手当,営業手当,現場管理費," & _
-                    "テレワーク手当,定常外業務対応手当,家賃手当,その他手当," & _
+    Print #fileNum, "社員番号,氏名,夜間当番手当,定常外業務対応手当," & _
                     "過不足調整,課税通勤費,非課税通勤費," & _
                     "立替金（顧客請求分）,立替金,その他"
     
@@ -80,11 +74,12 @@ Sub 経費インポートCSV作成()
     Dim empNo As String      ' 社員番号
     Dim empName As String     ' 氏名
     Dim nightDuty As Variant  ' 夜間当番手当（F列：手当2）
-    Dim telework As Variant   ' テレワーク手当（J列）
     Dim transport As Variant  ' 交通費（H列）
     Dim custBill As Variant   ' 顧客請求分（G列）
-    Dim otherExp As Variant   ' その他（I列）
-    Dim tatekaeTax As Variant ' 非課税精算・立替金（X列）= V+X+Y合算済み
+    Dim otherExp As Variant   ' その他（Y列優先、空ならJ列）
+    Dim otherDetail As Variant ' その他（J列）
+    Dim otherSettlement As Variant ' 非課税精算・その他（Y列）
+    Dim tatekaeTax As Variant ' 非課税精算・立替金（X列）
     Dim hasTA As Boolean      ' 立替金有無フラグ
     
     ' CSV出力用の値
@@ -103,9 +98,14 @@ Sub 経費インポートCSV作成()
         nightDuty = val(wsSource.Cells(i, "F").value & "")  ' F列：手当2（夜間＋RINK）
         custBill = val(wsSource.Cells(i, "G").value & "")   ' G列：顧客請求分
         transport = val(wsSource.Cells(i, "H").value & "")  ' H列：交通費
-        otherExp = val(wsSource.Cells(i, "I").value & "")   ' I列：その他
-        telework = val(wsSource.Cells(i, "J").value & "")   ' J列：テレワーク手当
-        tatekaeTax = val(wsSource.Cells(i, "X").value & "") ' X列：非課税精算（立替金）※合算済み
+        otherDetail = val(wsSource.Cells(i, "J").value & "")      ' J列：その他(会議費・消耗品など)
+        otherSettlement = val(wsSource.Cells(i, "Y").value & "")  ' Y列：非課税精算（その他）
+        If otherSettlement <> 0 Then
+            otherExp = otherSettlement
+        Else
+            otherExp = otherDetail
+        End If
+        tatekaeTax = val(wsSource.Cells(i, "X").value & "") ' X列：非課税精算（立替金）
         
         '--- 立替金の有無で分岐 ---
         ' X列に値がある → 立替金あり
@@ -114,13 +114,13 @@ Sub 経費インポートCSV作成()
         If hasTA Then
             ' 立替金ありの場合
             csvL = 0               ' 非課税通勤費 → 0
-            csvN = tatekaeTax      ' 立替金 → X列の値（V+X+Y合算済み）
-            csvO = 0               ' その他 → 0
+            csvN = tatekaeTax      ' 立替金 → X列の値
+            csvO = otherExp        ' その他 → Y列（非課税精算・その他）
         Else
             ' 立替金なしの場合
             csvL = transport       ' 非課税通勤費 → H列（交通費）
             csvN = 0               ' 立替金 → 0
-            csvO = otherExp        ' その他 → I列
+            csvO = otherExp        ' その他 → Y列（空ならJ列）
         End If
         
         '--- CSV行を組み立て ---
@@ -129,12 +129,7 @@ Sub 経費インポートCSV作成()
         csvLine = EscapeCSV(empNo) & "," & _
                   EscapeCSV(empName) & "," & _
                   nightDuty & "," & _
-                  "0" & "," & _
-                  "0" & "," & _
-                  telework & "," & _
                   "" & "," & _
-                  "0" & "," & _
-                  "0" & "," & _
                   "0" & "," & _
                   "0" & "," & _
                   csvL & "," & _

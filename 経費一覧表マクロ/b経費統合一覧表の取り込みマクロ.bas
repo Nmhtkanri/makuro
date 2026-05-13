@@ -102,6 +102,9 @@ Public Sub Append_本社経費_to_経費統合一覧表()
         ' H列(8): 内訳 ← 申請タイトル(3列目)
         arr(i, 8) = CStr(wsSrc.Cells(r, cSubj).value)
         
+        ' Z列(26): 仕訳区分 ← 本社経費識別用
+        arr(i, 26) = "本社経費"
+        
         arr(i, 16) = wsSrc.Cells(r, cAmt).value
         
         sG = "": sI = ""
