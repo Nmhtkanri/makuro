@@ -240,7 +240,7 @@ NextQmeisaiLine:
         Dim acctInfo(0 To 3) As String
         acctInfo(0) = Trim(fields(colBankName))     ' 金融機関名
         acctInfo(1) = Trim(fields(colBranch))        ' 支店名
-        acctInfo(2) = NormalizeAccountNumber(Trim(fields(colAcctNo)))     ' 口座番号
+        acctInfo(2) = Trim(fields(colAcctNo))        ' 口座番号
         acctInfo(3) = Trim(fields(colAcctName))      ' 口座名義カナ
         
         jinjerDict(empNo) = acctInfo
@@ -404,7 +404,7 @@ NextSmeisaiLine:
                 Dim suppInfo(0 To 3) As String
                 suppInfo(0) = Trim(suppFields(colSupBank))
                 suppInfo(1) = Trim(suppFields(colSupBranch))
-                suppInfo(2) = NormalizeAccountNumber(Trim(suppFields(colSupAcctNo)))
+                suppInfo(2) = Trim(suppFields(colSupAcctNo))
                 suppInfo(3) = Trim(suppFields(colSupAcctNm))
                 suppDict(suppEmpNo) = suppInfo
 
@@ -544,10 +544,7 @@ NextSuppLine:
         End If
         
         ' 給与振込一覧シートに転記
-        With wsOutput.Cells(outputRow, 1)
-            .NumberFormatLocal = "@"
-            .Value = Format(payDate, "yyyy/m/d")                          ' 支給日
-        End With
+        wsOutput.Cells(outputRow, 1).Value = Format(payDate, "yyyymmdd")  ' 支給日（八桁）
         wsOutput.Cells(outputRow, 2).Value = "給与"                       ' 振込種別（固定）
         wsOutput.Cells(outputRow, 3).Value = curEmpNo                     ' 従業員コード
         wsOutput.Cells(outputRow, 4).Value = qName                        ' 従業員名
@@ -642,45 +639,13 @@ NextEmployee:
         End If
     Next delRow
 
-    '--- 固定行（7777777等）も含めて実データ件数・日付・合計を再計算 ---
-    Dim finalLastRow As Long
-    Dim csvDataCount As Long
-    Dim finalTotalAmount As Double
-    Dim finalCalcRow As Long
-    finalLastRow = wsOutput.Cells(Rows.Count, 1).End(xlUp).Row
-    csvDataCount = 0
-    finalTotalAmount = 0
-
-    If finalLastRow >= 7 Then
-        For finalCalcRow = 7 To finalLastRow
-            If Trim(CStr(wsOutput.Cells(finalCalcRow, 3).Value)) <> "" Then
-                csvDataCount = csvDataCount + 1
-                With wsOutput.Cells(finalCalcRow, 1)
-                    .NumberFormatLocal = "@"
-                    .Value = Format(payDate, "yyyy/m/d")
-                End With
-                With wsOutput.Cells(finalCalcRow, 8)
-                    .NumberFormatLocal = "@"
-                    .Value = NormalizeAccountNumber(CStr(.Value))
-                End With
-                If IsAmountNumeric(wsOutput.Cells(finalCalcRow, 10).Value) Then
-                    finalTotalAmount = finalTotalAmount + AmountToDouble(wsOutput.Cells(finalCalcRow, 10).Value)
-                End If
-            End If
-        Next finalCalcRow
-    End If
-
-    wsOutput.Cells(4, 1).Value = csvDataCount & " 件"
-    wsOutput.Cells(4, 2).Value = csvDataCount & " 人"
-    wsOutput.Cells(4, 3).Value = Format(finalTotalAmount, "#,##0") & " 円"
-
     '===========================================================
     ' ④ CSV保存（楽たすインポート用）
     '===========================================================
     Dim csvSavedPath As String
     csvSavedPath = ""
 
-    If csvDataCount > 0 Then
+    If totalCount > 0 Then
         currentStep = "CSV保存先選択"
         Dim csvFileName As String
         csvFileName = Month(payDate) & "月振込額.csv"
@@ -714,11 +679,9 @@ NextEmployee:
             On Error GoTo 0
             On Error GoTo FatalError
 
-            Print #csvNo, "支給日*,振込種別*,従業員コード,従業員名*,金融機関名*,支店名*,口座種別*,口座番号*,口座名義*,支給額*"
-
-            ' 楽たす取込用にヘッダー1行 + データ行を出力（タイトル・集計行は出力しない）
+            ' 楽たす取込用にデータ行のみ出力（タイトル・集計・ヘッダー行は出力しない）
             Dim csvEndRow As Long
-            csvEndRow = finalLastRow
+            csvEndRow = 7 + totalCount - 1
             Dim csvRow As Long
             For csvRow = 7 To csvEndRow
                 currentStep = "CSV出力 行=" & csvRow
@@ -747,7 +710,7 @@ NextEmployee:
     Dim msg As String
     msg = "給与振込データの転記が完了しました！" & Chr(10) & Chr(10) & _
           "転記件数: " & totalCount & " 件" & Chr(10) & _
-          "支給日: " & Format(payDate, "yyyy/m/d") & Chr(10) & _
+          "支給日: " & Format(payDate, "yyyymmdd") & Chr(10) & _
           "Q-meisai読込件数: " & qmeisaiDict.Count & " 件" & Chr(10) & _
           "jinjer読込件数: " & jinjerDict.Count & " 件"
 
@@ -949,8 +912,6 @@ Private Function GetCsvCellValue(ByVal targetCell As Range, ByVal csvCol As Long
 
     If IsError(cellRaw) Or IsEmpty(cellRaw) Then
         GetCsvCellValue = ""
-    ElseIf csvCol = 1 Then
-        GetCsvCellValue = FormatDateForCsv(targetCell)
     ElseIf csvCol = 8 Then
         GetCsvCellValue = NormalizeAccountNumber(CStr(cellRaw))
     ElseIf csvCol = 10 Then
@@ -963,27 +924,6 @@ Private Function GetCsvCellValue(ByVal targetCell As Range, ByVal csvCol As Long
 
 ValueError:
     GetCsvCellValue = ""
-End Function
-
-
-'-------------------------------------------------------
-' CSV出力用の日付を yyyy/m/d 形式にする
-'-------------------------------------------------------
-Private Function FormatDateForCsv(ByVal targetCell As Range) As String
-    On Error GoTo DateValueError
-
-    If IsDate(targetCell.Value) Then
-        FormatDateForCsv = Format$(CDate(targetCell.Value), "yyyy/m/d")
-    ElseIf IsNumeric(targetCell.Value2) Then
-        FormatDateForCsv = Format$(CDate(targetCell.Value2), "yyyy/m/d")
-    Else
-        FormatDateForCsv = Trim(CStr(targetCell.Value))
-    End If
-
-    Exit Function
-
-DateValueError:
-    FormatDateForCsv = Trim(CStr(targetCell.Text))
 End Function
 
 

@@ -240,7 +240,7 @@ NextQmeisaiLine:
         Dim acctInfo(0 To 3) As String
         acctInfo(0) = Trim(fields(colBankName))     ' 金融機関名
         acctInfo(1) = Trim(fields(colBranch))        ' 支店名
-        acctInfo(2) = NormalizeAccountNumber(Trim(fields(colAcctNo)))     ' 口座番号
+        acctInfo(2) = Trim(fields(colAcctNo))        ' 口座番号
         acctInfo(3) = Trim(fields(colAcctName))      ' 口座名義カナ
         
         jinjerDict(empNo) = acctInfo
@@ -404,7 +404,7 @@ NextSmeisaiLine:
                 Dim suppInfo(0 To 3) As String
                 suppInfo(0) = Trim(suppFields(colSupBank))
                 suppInfo(1) = Trim(suppFields(colSupBranch))
-                suppInfo(2) = NormalizeAccountNumber(Trim(suppFields(colSupAcctNo)))
+                suppInfo(2) = Trim(suppFields(colSupAcctNo))
                 suppInfo(3) = Trim(suppFields(colSupAcctNm))
                 suppDict(suppEmpNo) = suppInfo
 
@@ -658,10 +658,6 @@ NextEmployee:
                 With wsOutput.Cells(finalCalcRow, 1)
                     .NumberFormatLocal = "@"
                     .Value = Format(payDate, "yyyy/m/d")
-                End With
-                With wsOutput.Cells(finalCalcRow, 8)
-                    .NumberFormatLocal = "@"
-                    .Value = NormalizeAccountNumber(CStr(.Value))
                 End With
                 If IsAmountNumeric(wsOutput.Cells(finalCalcRow, 10).Value) Then
                     finalTotalAmount = finalTotalAmount + AmountToDouble(wsOutput.Cells(finalCalcRow, 10).Value)
