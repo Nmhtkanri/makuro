@@ -16,7 +16,7 @@ Sub AutoCheck_And_SendMail()
     Dim logRow As Long
     Dim useE3Check As Boolean
     Dim skipCSVCheck As Boolean
-    Dim seisanAmount As String
+    Dim honraiAmt As String, shikyuAmt As String, sagakuAmt As String
     Dim useBCCCheck As Boolean
     Dim bccAddress As String
     Dim mailCount As Long
@@ -72,20 +72,24 @@ Sub AutoCheck_And_SendMail()
         If wsMail.Cells(i, "A").Value = True Then
             empName = wsMail.Cells(i, "C").Value
             
-            ' ê∏éZäz lookup from LOG
-            seisanAmount = ""
+            ' ã‡äz lookup from LOGÅiC=ñ{óàÇÃã‡äz, D=é¿ç€Ç…éxããÇµÇΩã‡äz, E=ç∑äzÅj
+            honraiAmt = "": shikyuAmt = "": sagakuAmt = ""
             If Not skipCSVCheck Then
                 empNoMail = Trim(CStr(wsMail.Cells(i, "B").Value))
                 For j = 2 To lastCSVRow
                     If Trim(CStr(wsCSV.Cells(j, "A").Value)) = empNoMail Then
-                        seisanAmount = CStr(wsCSV.Cells(j, "C").Value)
+                        honraiAmt = FormatAmount(wsCSV.Cells(j, "C").Value)
+                        shikyuAmt = FormatAmount(wsCSV.Cells(j, "D").Value)
+                        sagakuAmt = FormatAmount(wsCSV.Cells(j, "E").Value)
                         Exit For
                     End If
                 Next j
             End If
-            
+
             mailBody = Replace(baseBody, "[ëŒè€é“ñº]", empName)
-            mailBody = Replace(mailBody, "[ê∏éZäz]", seisanAmount)
+            mailBody = Replace(mailBody, "[ñ{óàÇÃã‡äz]", honraiAmt)
+            mailBody = Replace(mailBody, "[é¿ç€Ç…éxããÇµÇΩã‡äz]", shikyuAmt)
+            mailBody = Replace(mailBody, "[ç∑äz]", sagakuAmt)
             mailBody = empName & "Ç≥ÇÒ" & vbCrLf & vbCrLf & mailBody
             
             ' CC
@@ -145,3 +149,15 @@ Sub AutoCheck_And_SendMail()
         MsgBox "ëŒè€é“Çé©ìÆÉ`ÉFÉbÉNÇµÅAÉÅÅ[ÉãçÏê¨ÇäÆóπÇµÇ‹ÇµÇΩÅB", vbInformation
     End If
 End Sub
+
+Function FormatAmount(v As Variant) As String
+    Dim s As String
+    s = Trim(CStr(v))
+    If s = "" Then
+        FormatAmount = ""
+    ElseIf IsNumeric(s) Then
+        FormatAmount = Format(CDbl(s), "#,##0")
+    Else
+        FormatAmount = s   ' êîílÇ≈Ç»Ç¢ì¸óÕÇÕÇªÇÃÇ‹Ç‹
+    End If
+End Function
