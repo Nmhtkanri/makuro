@@ -1,5 +1,9 @@
 # 経費一覧表マクロ — README
 
+> 📌 **AI（Claude Code 等）で解析・修正する場合は [AI解析ガイド.md](AI解析ガイド.md) を先に読んでください。**
+> 列定義・分類ロジック・既知の癖・安全な解析手順を live xlsm の実測値でまとめています。
+> 本READMEと値が食い違う場合は AI解析ガイド.md（実測）が正です。スキル `keihi-macro` からも辿れます。
+
 ## 概要
 
 jinjer・e-staffing・**SAP Fieldglass**・Freee の 4つの経費管理システムからデータを取り込み、  

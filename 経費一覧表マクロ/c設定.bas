@@ -364,7 +364,9 @@ Private Function Collect_From_Source(ByRef agg As Object, ByRef maxDate As Objec
             End If
             
             ' 4. îÒâ€ê≈ê∏éZ(óßë÷ã‡)
-            matchedKw = HitAnyCollection(judgeText, kwNontaxTatekae)
+            Dim nonTaxText As String
+            nonTaxText = desc & " " & trans & " " & expenseType
+            matchedKw = HitAnyCollection(nonTaxText, kwNontaxTatekae)
             If matchedKw <> "" Then
                 If Not estFilled Then bucket(6) = bucket(6) + amt
                 resultCat = "I:îÒâ€ê≈ê∏éZ"

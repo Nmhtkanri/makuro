@@ -36,10 +36,10 @@ Public Sub Paste_SAP経費_From_File()
 
     ' 3. UTF-8 として CSV を開く（OpenText / Origin:=65001 = UTF-8 codepage）
     Dim wbCSV As Workbook
-    Workbooks.OpenText FileName:=CStr(csvPath), _
+    Workbooks.OpenText fileName:=CStr(csvPath), _
         Origin:=65001, _
-        StartRow:=1, _
-        DataType:=xlDelimited, _
+        startRow:=1, _
+        dataType:=xlDelimited, _
         TextQualifier:=xlTextQualifierDoubleQuote, _
         ConsecutiveDelimiter:=False, _
         Tab:=False, _
@@ -111,6 +111,30 @@ Public Sub Paste_SAP経費_From_File()
         Next h
     Next r
 
+    ' 8a. 夜間当番キーワードが説明(F列)のみにある場合は業者名(D列)へ転記
+    '     下流の hSAP経費取り込みマクロ は業者名(D列)だけで夜間当番手当を判定するため、
+    '     説明(F列)にしか無いと顧客請求分(AH)へ流れてしまうのを防ぐ。
+    For i = 1 To rowsToCopy
+        If IsNightDutyExpenseRow(outArr(i, 6), "") And Not IsNightDutyExpenseRow(outArr(i, 4), "") Then
+            outArr(i, 4) = outArr(i, 6)
+        End If
+    Next i
+
+    ' 8b. 夜間当番手当の税抜補正
+    '     SAP は夜間当番手当（顧客対応当番／顧客当番）を税込で出力するため、
+    '     C列(費用合計) を ÷1.1（四捨五入）して税抜に補正する。
+    '     判定: D列(業者名) または F列(説明) に「顧客対応当番」または「顧客当番」を含む行
+    Dim ndAmt As Double
+    Dim ndCount As Long: ndCount = 0
+    For i = 1 To rowsToCopy
+        If IsNightDutyExpenseRow(outArr(i, 4), outArr(i, 6)) Then
+            If TryParseAmount(outArr(i, 3), ndAmt) Then
+                outArr(i, 3) = Application.WorksheetFunction.Round(ndAmt / 1.1, 0)
+                ndCount = ndCount + 1
+            End If
+        End If
+    Next i
+
     ' 9. SAP_経費 に書き出し
     With wsDst
         .Range(.Cells(2, 1), .Cells(rowsToCopy + 1, 13)).value = outArr
@@ -120,7 +144,8 @@ Public Sub Paste_SAP経費_From_File()
     wbCSV.Close SaveChanges:=False
 
     MsgBox "SAP 経費 CSV の取込が完了しました。" & vbCrLf & _
-           "件数: " & rowsToCopy & " 行", vbInformation
+           "件数: " & rowsToCopy & " 行" & vbCrLf & _
+           "夜間当番手当 税抜補正: " & ndCount & " 行", vbInformation
 
 FinallyExit:
     Application.ScreenUpdating = True
@@ -135,3 +160,49 @@ ErrHandler:
     MsgBox "SAP 経費 CSV 取込エラー: " & Err.Number & vbCrLf & Err.Description, vbExclamation
     Resume FinallyExit
 End Sub
+
+' ============================================================
+'  ヘルパー: 夜間当番手当（顧客対応当番／顧客当番）の行か判定
+'  - D列(業者名) または F列(説明) に該当語を含むか
+' ============================================================
+Private Function IsNightDutyExpenseRow(ByVal vendor As Variant, ByVal descr As Variant) As Boolean
+    Dim s As String
+    s = SafeStr2(vendor) & " " & SafeStr2(descr)
+    If InStr(1, s, "顧客対応", vbTextCompare) > 0 Then
+        IsNightDutyExpenseRow = True
+        Exit Function
+    End If
+    If InStr(1, s, "顧客当番", vbTextCompare) > 0 Then
+        IsNightDutyExpenseRow = True
+    End If
+End Function
+
+Private Function SafeStr2(ByVal v As Variant) As String
+    If IsError(v) Then
+        SafeStr2 = ""
+    ElseIf IsNull(v) Or isEmpty(v) Then
+        SafeStr2 = ""
+    Else
+        SafeStr2 = CStr(v)
+    End If
+End Function
+
+Private Function TryParseAmount(ByVal v As Variant, ByRef outVal As Double) As Boolean
+    Dim s As String
+    s = SafeStr2(v)
+    s = Replace(s, ",", "")
+    s = Replace(s, "\", "")
+    s = Replace(s, "￥", "")
+    s = Replace(s, "円", "")
+    s = Trim$(s)
+    If s = "" Then
+        TryParseAmount = False
+        Exit Function
+    End If
+    If IsNumeric(s) Then
+        outVal = CDbl(s)
+        TryParseAmount = True
+    Else
+        TryParseAmount = False
+    End If
+End Function
