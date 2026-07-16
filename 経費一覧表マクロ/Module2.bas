@@ -1,24 +1,41 @@
 Attribute VB_Name = "Module2"
+Option Explicit
+
+' === quiet実行用（MsgBoxを抑止して自動実行するためのフラグ）===
+Private gQuiet As Boolean
+
+' ============================================================
+' quiet実行（MsgBoxなし。COM経由の自動実行・検証用）
+' ============================================================
+Public Sub 経費インポートCSV作成_Quiet()
+    gQuiet = True
+    On Error GoTo QuietDone
+    経費インポートCSV作成
+QuietDone:
+    gQuiet = False
+End Sub
+
 Sub 経費インポートCSV作成()
     '=============================================================
     ' 経費一覧表 → jinjerインポート用CSV 変換マクロ
     '
     ' 【処理概要】
-    ' 経費一覧表シートのデータを読み取り、jinjerにインポートできる
-    ' CSV形式に変換して Y:\給与明細\R8年\5月 に保存します。
+    ' 集計シートのデータを読み取り、jinjerにインポートできる
+    ' CSV形式に変換して このブックのあるフォルダ に保存します。
     '
-    ' 【マッピングルール】
-    '  jinjer CSV列    ← 経費一覧表の列
-    '  A: 社員番号      ← A列
-    '  B: 氏名          ← B列
-    '  C: 夜間当番手当  ← R/S・T/Uの内訳が「夜間当番手当」の金額
+    ' 【マッピングルール】(2026-07-16 ヘッダー見直し・11列)
+    '  jinjer CSV列        ← 集計シートの列
+    '  A: 社員番号          ← A列
+    '  B: 氏名              ← B列
+    '  C: 夜間当番手当      ← R/S・T/Uの内訳が「夜間当番手当」の金額
     '  D: 定常外業務対応手当 ← R/S・T/Uの内訳が「定常外業務対応手当」の金額
-    '  E: 過不足調整    ← 0
-    '  F: 課税通勤費    ← 0
-    '  G: 非課税通勤費  ← V列
-    '  H: 立替金(顧客請求分) ← W列
-    '  I: 立替金        ← X列
-    '  J: その他        ← Y列（非課税精算・その他）
+    '  E: 支給過不足調整    ← 0（旧「過不足調整」から名称変更）
+    '  F: 非課税通勤費      ← V列（旧「課税通勤費」列は削除）
+    '  G: 立替金（顧客請求分）← W列
+    '  H: 立替金            ← X列
+    '  I: その他            ← Y列（その他経費）
+    '  J: その他手当        ← R/S・T/Uの内訳が「その他手当」の金額（その他とは別物）
+    '  K: 現物支給          ← 0
     '=============================================================
 
     Dim wsSource As Worksheet
@@ -36,58 +53,53 @@ Sub 経費インポートCSV作成()
     
     '--- データがあるか確認 ---
     If lastRow < 2 Then
-        MsgBox "経費一覧表にデータがありません。", vbExclamation
+        If Not gQuiet Then MsgBox "集計シートにデータがありません。", vbExclamation
         Exit Sub
     End If
-    
+
     '--- CSV保存先パス ---
-    ' ファイル名に年月を付けて保存
-    csvPath = "Y:\給与明細\R8年\5月\jinjer_経費インポート_" & Format(Date, "yyyymmdd") & ".csv"
-    
-    '--- 保存先フォルダの存在確認 ---
-    If Dir("Y:\給与明細\R8年\5月", vbDirectory) = "" Then
-        MsgBox "保存先フォルダが見つかりません。" & vbCrLf & _
-               "Y:\給与明細\R8年\5月 を確認してください。", vbExclamation
-        Exit Sub
-    End If
-    
+    ' このブックのあるフォルダ（月フォルダに置く運用のため自動的に正しい月へ出る）
+    csvPath = ThisWorkbook.Path & "\jinjer_経費インポート_" & Format(Date, "yyyymmdd") & ".csv"
+
     '--- CSVファイルを作成 ---
     fileNum = FreeFile
     Open csvPath For Output As #fileNum
-    
-    '--- ヘッダー行を書き込み ---
+
+    '--- ヘッダー行を書き込み（2026-07-16 見直し・11列。jinjerテンプレート「経費インポート用」と一致させること）---
     Print #fileNum, "社員番号,氏名,夜間当番手当,定常外業務対応手当," & _
-                    "過不足調整,課税通勤費,非課税通勤費," & _
-                    "立替金（顧客請求分）,立替金,その他"
-    
+                    "支給過不足調整,非課税通勤費," & _
+                    "立替金（顧客請求分）,立替金,その他,その他手当,現物支給"
+
     '--- データ行を書き込み ---
     Dim empNo As String      ' 社員番号
     Dim empName As String     ' 氏名
     Dim nightDuty As Double   ' 夜間当番手当（R/S・T/U）
     Dim teijoDuty As Double   ' 定常外業務対応手当（R/S・T/U）
+    Dim sonotaTeate As Double ' その他手当（R/S・T/U）
     Dim transport As Double   ' 非課税通勤費（V列）
     Dim custBill As Double    ' 立替金（顧客請求分）（W列）
     Dim tatekaeTax As Double  ' 立替金（X列）
     Dim otherExp As Double    ' その他（Y列）
-    
+
     For i = 2 To lastRow
-        '--- 経費一覧表からデータ取得 ---
+        '--- 集計シートからデータ取得 ---
         empNo = Trim(CStr(wsSource.Cells(i, "A").value & ""))     ' A列：社員番号
         empName = Trim(CStr(wsSource.Cells(i, "B").value & ""))   ' B列：氏名
-        
+
         ' 社員番号が空欄の行はスキップ
         If empNo = "" Then GoTo NextRow
-        
+
         nightDuty = 0
         teijoDuty = 0
-        AddAllowanceFromPair wsSource.Cells(i, "R").value, wsSource.Cells(i, "S").value, nightDuty, teijoDuty
-        AddAllowanceFromPair wsSource.Cells(i, "T").value, wsSource.Cells(i, "U").value, nightDuty, teijoDuty
-        
+        sonotaTeate = 0
+        AddAllowanceFromPair wsSource.Cells(i, "R").value, wsSource.Cells(i, "S").value, nightDuty, teijoDuty, sonotaTeate
+        AddAllowanceFromPair wsSource.Cells(i, "T").value, wsSource.Cells(i, "U").value, nightDuty, teijoDuty, sonotaTeate
+
         transport = ValJP(wsSource.Cells(i, "V").value)   ' V列：非課税通勤費
         custBill = ValJP(wsSource.Cells(i, "W").value)    ' W列：立替金（顧客請求分）
         tatekaeTax = ValJP(wsSource.Cells(i, "X").value)  ' X列：立替金
         otherExp = ValJP(wsSource.Cells(i, "Y").value)    ' Y列：その他
-        
+
         '--- CSV行を組み立て ---
         ' カンマ区切りで値を連結
         ' 文字列項目はダブルクォートで囲む
@@ -96,23 +108,24 @@ Sub 経費インポートCSV作成()
                   NumText(nightDuty) & "," & _
                   NumText(teijoDuty) & "," & _
                   "0" & "," & _
-                  "0" & "," & _
                   NumText(transport) & "," & _
                   NumText(custBill) & "," & _
                   NumText(tatekaeTax) & "," & _
-                  NumText(otherExp)
-        
+                  NumText(otherExp) & "," & _
+                  NumText(sonotaTeate) & "," & _
+                  "0"
+
         '--- 書き込み ---
         Print #fileNum, csvLine
-        
+
 NextRow:
     Next i
-    
+
     '--- ファイルを閉じる ---
     Close #fileNum
-    
+
     '--- 完了メッセージ ---
-    MsgBox "jinjerインポート用CSVを作成しました！" & vbCrLf & vbCrLf & _
+    If Not gQuiet Then MsgBox "jinjerインポート用CSVを作成しました！" & vbCrLf & vbCrLf & _
            "保存先: " & csvPath & vbCrLf & _
            "対象: " & (lastRow - 1) & " 件", vbInformation
 
@@ -124,18 +137,21 @@ End Sub
 Private Sub AddAllowanceFromPair(ByVal allowanceName As Variant, _
                                  ByVal amountValue As Variant, _
                                  ByRef nightDuty As Double, _
-                                 ByRef teijoDuty As Double)
+                                 ByRef teijoDuty As Double, _
+                                 ByRef sonotaTeate As Double)
     Dim nameText As String
     Dim amount As Double
-    
+
     nameText = Trim$(CStr(allowanceName))
     amount = ValJP(amountValue)
-    
+
     Select Case nameText
         Case "夜間当番手当"
             nightDuty = nightDuty + amount
         Case "定常外業務対応手当"
             teijoDuty = teijoDuty + amount
+        Case "その他手当"
+            sonotaTeate = sonotaTeate + amount
     End Select
 End Sub
 
@@ -143,7 +159,7 @@ End Sub
 ' 日本語Excel表示の金額を数値化する
 '=============================================================
 Private Function ValJP(ByVal v As Variant) As Double
-    If IsError(v) Or IsEmpty(v) Then Exit Function
+    If IsError(v) Or isEmpty(v) Then Exit Function
     
     Dim s As String
     s = Trim$(CStr(v))

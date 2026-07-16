@@ -1,6 +1,9 @@
 Attribute VB_Name = "仕訳データ振り分けマクロ"
 Option Explicit
 
+' === quiet実行用（c設定のQuiet実行から設定される。MsgBox抑止）===
+Public gQuietRS As Boolean
+
 ' ============================================================
 ' 仕訳データ手当振り分け_RS_TU
 ' ------------------------------------------------------------
@@ -30,7 +33,7 @@ Public Sub 仕訳データ手当振り分け_RS_TU()
     On Error GoTo ErrHandler
 
     If wsShiwake Is Nothing Or wsSyukei Is Nothing Then
-        MsgBox "必須シートが見つかりません" & vbCrLf & _
+        If Not gQuietRS Then MsgBox "必須シートが見つかりません" & vbCrLf & _
                "(仕訳データ / 集計)", vbCritical
         GoTo Cleanup
     End If
@@ -39,10 +42,10 @@ Public Sub 仕訳データ手当振り分け_RS_TU()
     Dim empDict As Object
     Set empDict = CreateObject("Scripting.Dictionary")
     Dim lastRowS As Long, r As Long
-    lastRowS = wsSyukei.Cells(wsSyukei.Rows.Count, 1).End(xlUp).Row
+    lastRowS = wsSyukei.Cells(wsSyukei.rows.Count, 1).End(xlUp).Row
     For r = 2 To lastRowS
         Dim empKey As String
-        empKey = NormId(wsSyukei.Cells(r, 1).Value)
+        empKey = NormId(wsSyukei.Cells(r, 1).value)
         If empKey <> "" Then
             If Not empDict.Exists(empKey) Then empDict.Add empKey, r
         End If
@@ -54,11 +57,11 @@ Public Sub 仕訳データ手当振り分け_RS_TU()
     Dim lastRowJ As Long
 
     ' 通信手当: I列(9)基準
-    lastRowJ = wsShiwake.Cells(wsShiwake.Rows.Count, 9).End(xlUp).Row
+    lastRowJ = wsShiwake.Cells(wsShiwake.rows.Count, 9).End(xlUp).Row
     For r = 2 To lastRowJ
         Dim idT As String, amtT As Double
-        idT = NormId(wsShiwake.Cells(r, 9).Value)
-        amtT = Val(CStr(wsShiwake.Cells(r, 8).Value))
+        idT = NormId(wsShiwake.Cells(r, 9).value)
+        amtT = val(CStr(wsShiwake.Cells(r, 8).value))
         If idT <> "" And amtT <> 0 Then
             If dictTsushin.Exists(idT) Then
                 dictTsushin(idT) = dictTsushin(idT) + amtT
@@ -69,11 +72,11 @@ Public Sub 仕訳データ手当振り分け_RS_TU()
     Next r
 
     ' 定常外業務対応手当: L列(12)基準
-    lastRowJ = wsShiwake.Cells(wsShiwake.Rows.Count, 12).End(xlUp).Row
+    lastRowJ = wsShiwake.Cells(wsShiwake.rows.Count, 12).End(xlUp).Row
     For r = 2 To lastRowJ
         Dim idD As String, amtD As Double
-        idD = NormId(wsShiwake.Cells(r, 12).Value)
-        amtD = Val(CStr(wsShiwake.Cells(r, 11).Value))
+        idD = NormId(wsShiwake.Cells(r, 12).value)
+        amtD = val(CStr(wsShiwake.Cells(r, 11).value))
         If idD <> "" And amtD <> 0 Then
             If dictTeijo.Exists(idD) Then
                 dictTeijo(idD) = dictTeijo(idD) + amtD
@@ -94,11 +97,11 @@ Public Sub 仕訳データ手当振り分け_RS_TU()
     Else
         wsLog.Cells.Clear
     End If
-    wsLog.Cells(1, 1).Value = "社員番号"
-    wsLog.Cells(1, 2).Value = "手当名"
-    wsLog.Cells(1, 3).Value = "金額"
-    wsLog.Cells(1, 4).Value = "対象行"
-    wsLog.Cells(1, 5).Value = "結果"
+    wsLog.Cells(1, 1).value = "社員番号"
+    wsLog.Cells(1, 2).value = "手当名"
+    wsLog.Cells(1, 3).value = "金額"
+    wsLog.Cells(1, 4).value = "対象行"
+    wsLog.Cells(1, 5).value = "結果"
     Dim logRow As Long: logRow = 2
 
     ' --- 振り分け処理 ---
@@ -106,7 +109,7 @@ Public Sub 仕訳データ手当振り分け_RS_TU()
 
     ' 1) 通信手当を先に処理
     Dim kTsushin As Variant
-    For Each kTsushin In dictTsushin.Keys
+    For Each kTsushin In dictTsushin.keys
         Dim empNoT As String: empNoT = CStr(kTsushin)
         Dim valT As Double: valT = dictTsushin(kTsushin)
         If empDict.Exists(empNoT) Then
@@ -114,25 +117,25 @@ Public Sub 仕訳データ手当振り分け_RS_TU()
             Dim resT As String
             resT = WriteToRS_TU(wsSyukei, tgtRowT, "通信手当", valT)
             hitCount = hitCount + 1
-            wsLog.Cells(logRow, 1).Value = empNoT
-            wsLog.Cells(logRow, 2).Value = "通信手当"
-            wsLog.Cells(logRow, 3).Value = valT
-            wsLog.Cells(logRow, 4).Value = tgtRowT
-            wsLog.Cells(logRow, 5).Value = resT
+            wsLog.Cells(logRow, 1).value = empNoT
+            wsLog.Cells(logRow, 2).value = "通信手当"
+            wsLog.Cells(logRow, 3).value = valT
+            wsLog.Cells(logRow, 4).value = tgtRowT
+            wsLog.Cells(logRow, 5).value = resT
             logRow = logRow + 1
         Else
-            wsLog.Cells(logRow, 1).Value = empNoT
-            wsLog.Cells(logRow, 2).Value = "通信手当"
-            wsLog.Cells(logRow, 3).Value = valT
-            wsLog.Cells(logRow, 4).Value = ""
-            wsLog.Cells(logRow, 5).Value = "突合不可"
+            wsLog.Cells(logRow, 1).value = empNoT
+            wsLog.Cells(logRow, 2).value = "通信手当"
+            wsLog.Cells(logRow, 3).value = valT
+            wsLog.Cells(logRow, 4).value = ""
+            wsLog.Cells(logRow, 5).value = "突合不可"
             logRow = logRow + 1
         End If
     Next kTsushin
 
     ' 2) 定常外業務対応手当を後に処理
     Dim kTeijo As Variant
-    For Each kTeijo In dictTeijo.Keys
+    For Each kTeijo In dictTeijo.keys
         Dim empNoD As String: empNoD = CStr(kTeijo)
         Dim valD As Double: valD = dictTeijo(kTeijo)
         If empDict.Exists(empNoD) Then
@@ -140,23 +143,23 @@ Public Sub 仕訳データ手当振り分け_RS_TU()
             Dim resD As String
             resD = WriteToRS_TU(wsSyukei, tgtRowD, "定常外業務対応手当", valD)
             hitCount = hitCount + 1
-            wsLog.Cells(logRow, 1).Value = empNoD
-            wsLog.Cells(logRow, 2).Value = "定常外業務対応手当"
-            wsLog.Cells(logRow, 3).Value = valD
-            wsLog.Cells(logRow, 4).Value = tgtRowD
-            wsLog.Cells(logRow, 5).Value = resD
+            wsLog.Cells(logRow, 1).value = empNoD
+            wsLog.Cells(logRow, 2).value = "定常外業務対応手当"
+            wsLog.Cells(logRow, 3).value = valD
+            wsLog.Cells(logRow, 4).value = tgtRowD
+            wsLog.Cells(logRow, 5).value = resD
             logRow = logRow + 1
         Else
-            wsLog.Cells(logRow, 1).Value = empNoD
-            wsLog.Cells(logRow, 2).Value = "定常外業務対応手当"
-            wsLog.Cells(logRow, 3).Value = valD
-            wsLog.Cells(logRow, 4).Value = ""
-            wsLog.Cells(logRow, 5).Value = "突合不可"
+            wsLog.Cells(logRow, 1).value = empNoD
+            wsLog.Cells(logRow, 2).value = "定常外業務対応手当"
+            wsLog.Cells(logRow, 3).value = valD
+            wsLog.Cells(logRow, 4).value = ""
+            wsLog.Cells(logRow, 5).value = "突合不可"
             logRow = logRow + 1
         End If
     Next kTeijo
 
-    MsgBox "処理完了: " & hitCount & "件の手当を振り分けました" & vbCrLf & _
+    If Not gQuietRS Then MsgBox "処理完了: " & hitCount & "件の手当を振り分けました" & vbCrLf & _
            "(ログ: 仕訳データ振り分けログ シート)", vbInformation
 
 Cleanup:
@@ -166,7 +169,7 @@ Cleanup:
     Exit Sub
 
 ErrHandler:
-    MsgBox "Error " & Err.Number & ": " & Err.Description, vbCritical
+    If Not gQuietRS Then MsgBox "Error " & Err.Number & ": " & Err.Description, vbCritical
     Resume Cleanup
 End Sub
 
@@ -181,31 +184,31 @@ Private Function WriteToRS_TU(ws As Worksheet, ByVal rowNum As Long, _
     Const COL_T As Long = 20  ' T列 = 内訳2
     Const COL_U As Long = 21  ' U列 = 内訳金額2
 
-    Dim valR As String: valR = Trim$(CStr(ws.Cells(rowNum, COL_R).Value))
-    Dim valTSlot As String: valTSlot = Trim$(CStr(ws.Cells(rowNum, COL_T).Value))
+    Dim valR As String: valR = Trim$(CStr(ws.Cells(rowNum, COL_R).value))
+    Dim valTSlot As String: valTSlot = Trim$(CStr(ws.Cells(rowNum, COL_T).value))
 
     ' --- R/S 判定 ---
     If valR = "" Or valR = "0" Then
-        ws.Cells(rowNum, COL_R).Value = teate
-        ws.Cells(rowNum, COL_S).Value = amt
+        ws.Cells(rowNum, COL_R).value = teate
+        ws.Cells(rowNum, COL_S).value = amt
         WriteToRS_TU = "R書き込み"
         Exit Function
     End If
     If valR = teate Then
-        ws.Cells(rowNum, COL_S).Value = Val(CStr(ws.Cells(rowNum, COL_S).Value)) + amt
+        ws.Cells(rowNum, COL_S).value = val(CStr(ws.Cells(rowNum, COL_S).value)) + amt
         WriteToRS_TU = "R加算"
         Exit Function
     End If
 
     ' --- T/U 判定 ---
     If valTSlot = "" Or valTSlot = "0" Then
-        ws.Cells(rowNum, COL_T).Value = teate
-        ws.Cells(rowNum, COL_U).Value = amt
+        ws.Cells(rowNum, COL_T).value = teate
+        ws.Cells(rowNum, COL_U).value = amt
         WriteToRS_TU = "T書き込み"
         Exit Function
     End If
     If valTSlot = teate Then
-        ws.Cells(rowNum, COL_U).Value = Val(CStr(ws.Cells(rowNum, COL_U).Value)) + amt
+        ws.Cells(rowNum, COL_U).value = val(CStr(ws.Cells(rowNum, COL_U).value)) + amt
         WriteToRS_TU = "T加算"
         Exit Function
     End If
@@ -221,7 +224,7 @@ Private Function NormId(ByVal v As Variant) As String
     Dim s As String: s = Trim$(CStr(v))
     If s = "" Or s = "0" Then NormId = "": Exit Function
     If IsNumeric(s) Then
-        NormId = CStr(CLng(Val(s)))
+        NormId = CStr(CLng(val(s)))
     Else
         NormId = s
     End If

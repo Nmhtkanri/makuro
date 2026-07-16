@@ -50,6 +50,24 @@ Private kwEtc As Collection
 Private kwTransNG As Collection
 Private kwKokyakuNG As Collection
 
+' === quiet実行用（MsgBoxを抑止して自動実行するためのフラグ）===
+Private gQuiet As Boolean
+' === 新規追加した社員の要約（Rewrite_Outputがセット、完了メッセージで表示）===
+Private gAddedInfo As String
+
+' ============================================================
+' quiet実行（MsgBoxなし。COM経由の自動実行・検証用）
+' ============================================================
+Public Sub Run_経費集計_設定シート版_Quiet()
+    gQuiet = True
+    gQuietRS = True   ' 仕訳データ振り分けマクロ側のMsgBoxも抑止
+    On Error GoTo QuietDone
+    Run_経費集計_設定シート版
+QuietDone:
+    gQuiet = False
+    gQuietRS = False
+End Sub
+
 ' ============================================================
 ' メイン処理
 ' ============================================================
@@ -61,7 +79,7 @@ Public Sub Run_経費集計_設定シート版()
     
     ' 1) 設定シートからキーワードを読み込む
     If Not LoadKeywordsFromSetting() Then
-        MsgBox "設定シートの読み込みに失敗しました。" & vbCrLf & _
+        If Not gQuiet Then MsgBox "設定シートの読み込みに失敗しました。" & vbCrLf & _
                "「設定」シートが存在するか確認してください。" & vbCrLf & _
                "初回は Setup_設定シート作成 を実行してください。", vbExclamation
         GoTo FinallyExit
@@ -77,24 +95,27 @@ Public Sub Run_経費集計_設定シート版()
     Set empList = CreateObject("Scripting.Dictionary")
     
     hitCount = Collect_From_Source(agg, maxDate, empList)
-    
+
     If hitCount = 0 Then
-        MsgBox "取り込み件数が0でした。出力シートは変更していません。" & vbCrLf & _
+        If Not gQuiet Then MsgBox "取り込み件数が0でした。出力シートは変更していません。" & vbCrLf & _
                "・取り込み元シート名: " & SH_SRC & vbCrLf & _
                "・設定シートのキーワードをご確認ください。", vbExclamation
         GoTo FinallyExit
     End If
-    
+
     ' 4) バックアップ作成後、出力
     BackupSheet SH_SUM
-    Rewrite_Output agg, maxDate
+    Rewrite_Output agg, maxDate, empList
 
     ' 5) 仕訳データ手当の振り分け（R/S, T/U列）
     仕訳データ手当振り分け_RS_TU
-    
-    MsgBox "集計が完了しました。" & vbCrLf & _
+
+    If Not gQuiet Then MsgBox "集計が完了しました。" & vbCrLf & _
            "処理件数: " & hitCount & "件" & vbCrLf & _
-           "詳細は「集計ログ」シートをご確認ください。", vbInformation
+           "詳細は「集計ログ」シートをご確認ください。" & _
+           IIf(gAddedInfo <> "", vbCrLf & vbCrLf & _
+               "★集計シートに未登録だったため自動追加した社員:" & gAddedInfo & vbCrLf & _
+               "（A/B列の並び・R～Y列の整備をご確認ください）", ""), vbInformation
 
 FinallyExit:
     Application.Calculation = xlCalculationAutomatic
@@ -103,7 +124,7 @@ FinallyExit:
     Exit Sub
     
 ErrHandler:
-    MsgBox "エラー: " & Err.Number & vbCrLf & Err.Description, vbExclamation
+    If Not gQuiet Then MsgBox "エラー: " & Err.Number & vbCrLf & Err.Description, vbExclamation
     Resume FinallyExit
 End Sub
 
@@ -220,7 +241,7 @@ End Sub
 Private Function Collect_From_Source(ByRef agg As Object, ByRef maxDate As Object, ByRef empList As Object) As Long
     Dim ws As Worksheet
     If Not SheetExists(SH_SRC) Then
-        MsgBox "取り込み元シートが見つかりません: " & SH_SRC, vbExclamation
+        If Not gQuiet Then MsgBox "取り込み元シートが見つかりません: " & SH_SRC, vbExclamation
         Collect_From_Source = 0
         Exit Function
     End If
@@ -247,7 +268,7 @@ Private Function Collect_From_Source(ByRef agg As Object, ByRef maxDate As Objec
     If cEStaff = 0 Then cEStaff = 34 ' S列フォールバック
     
     If cEmpNo = 0 Or cName = 0 Or cUch = 0 Or cAmt = 0 Then
-        MsgBox "必須列が見つからないため取り込み中止。" & vbCrLf & _
+        If Not gQuiet Then MsgBox "必須列が見つからないため取り込み中止。" & vbCrLf & _
                "社員番号/氏名/内訳/合計（金額）の見出しをご確認ください。", vbExclamation
         Collect_From_Source = 0
         Exit Function
@@ -273,7 +294,7 @@ Private Function Collect_From_Source(ByRef agg As Object, ByRef maxDate As Objec
         If empNo = "" And empNm = "" Then GoTo NextR
         
         key = BuildEmpKey(empNo, empNm)
-        If Not empList.Exists(key) Then empList.Add key, Array(empNo, empNm)
+        If Not empList.Exists(key) Then empList.Add key, Array(empNo, empNm, Trim$(CStr(ws.Cells(r, cName).value)))
         
         desc = NormalizeStr(ws.Cells(r, cUch).value)
         trans = ""
@@ -423,8 +444,10 @@ End Function
 
 ' ============================================================
 ' 出力シート書き込み
+' ・書き込み前に C～L のデータ行をクリア（経費ゼロ社員に前回値が残る問題の対策）
+' ・集計シートA列に無い社員（新入社員等）は末尾へ自動追加（計上漏れ事故 2026-07 の対策）
 ' ============================================================
-Private Sub Rewrite_Output(ByVal agg As Object, ByVal maxDate As Object)
+Private Sub Rewrite_Output(ByVal agg As Object, ByVal maxDate As Object, ByVal empList As Object)
     Dim ws As Worksheet
     If Not SheetExists(SH_SUM) Then
         Worksheets.Add(After:=Worksheets(Worksheets.Count)).Name = SH_SUM
@@ -479,7 +502,13 @@ Private Sub Rewrite_Output(ByVal agg As Object, ByVal maxDate As Object)
     Dim lastR As Long
     lastR = ws.Cells(ws.rows.Count, COL_EMP_NO).End(xlUp).Row
     If lastR < 2 Then lastR = 1
-    
+
+    ' C～L のデータ行を事前クリア（今月データが無い社員に前回実行の値が残らないように。
+    ' 直前に BackupSheet で自動バックアップ済みのため復元可能）
+    If lastR >= 2 Then
+        ws.Range(ws.Cells(2, COL_TOTAL), ws.Cells(lastR, COL_DATE)).ClearContents
+    End If
+
     Dim Z As Long
     For Z = 2 To lastR
         Dim empId As String
@@ -508,6 +537,62 @@ Private Sub Rewrite_Output(ByVal agg As Object, ByVal maxDate As Object)
             byId.Remove empId  ' 処理済みを除去
         End If
     Next Z
+
+    ' ============================================================
+    ' 集計シートA列に無い社員（byIdに残った分＝新入社員等）を末尾へ自動追加
+    ' ・20YY始まりの自社社員のみ追加。5/6/9始まり（派遣・テスト）はログのみ
+    ' ============================================================
+    gAddedInfo = ""
+
+    ' 社員番号 → 生の氏名（統合一覧表の初出表記）
+    Dim nameById As Object: Set nameById = CreateObject("Scripting.Dictionary")
+    Dim ek, ea
+    For Each ek In empList.keys
+        ea = empList(ek)
+        Dim eid As String
+        eid = NormalizeId(CStr(ea(0)))
+        If eid <> "" And Not nameById.Exists(eid) Then
+            If UBound(ea) >= 2 Then
+                nameById.Add eid, CStr(ea(2))
+            Else
+                nameById.Add eid, CStr(ea(1))
+            End If
+        End If
+    Next ek
+
+    Dim writeR As Long: writeR = lastR
+    Dim ak, aid As String, avals, aname As String, atotal As Double
+    For Each ak In byId.keys
+        aid = CStr(ak)
+        aname = ""
+        If nameById.Exists(aid) Then aname = nameById(aid)
+        avals = byId(aid)
+        atotal = Nz(avals(0)) + Nz(avals(1)) + Nz(avals(5)) + _
+                 Nz(avals(2)) + Nz(avals(6)) + Nz(avals(3)) + Nz(avals(4))
+        If Left$(aid, 1) = "5" Or Left$(aid, 1) = "6" Or Left$(aid, 1) = "9" Then
+            ' 給与計算対象外（派遣・テスト）は行追加しない
+            AddLog 0, aid, aname, "（給与計算対象外のため行追加なし）", atotal, "集計:対象外スキップ", ""
+        Else
+            writeR = writeR + 1
+            ws.Cells(writeR, COL_EMP_NO).NumberFormat = "@"
+            ws.Cells(writeR, COL_EMP_NO).value = aid
+            ws.Cells(writeR, COL_NAME).value = aname
+            ws.Cells(writeR, COL_GK).value = avals(0)
+            ws.Cells(writeR, COL_RINK).value = avals(1)
+            ws.Cells(writeR, COL_ALLOW2).value = Nz(avals(0)) + Nz(avals(1))
+            ws.Cells(writeR, COL_BILL).value = avals(5)
+            ws.Cells(writeR, COL_TRANS).value = avals(2)
+            ws.Cells(writeR, COL_NONTAX_TATEKAE).value = avals(6)
+            ws.Cells(writeR, COL_ETC).value = avals(3)
+            ws.Cells(writeR, COL_TW).value = avals(4)
+            ws.Cells(writeR, COL_TOTAL).value = atotal
+            If dateById.Exists(aid) Then
+                ws.Cells(writeR, COL_DATE).value = CDate(dateById(aid))
+            End If
+            AddLog 0, aid, aname, "（集計シートに新規行追加）", atotal, "集計:新規行追加", ""
+            gAddedInfo = gAddedInfo & vbCrLf & "  " & aid & " " & aname & "（合計 " & Format$(atotal, "#,##0") & " 円）"
+        End If
+    Next ak
 End Sub
 
 ' ============================================================
